@@ -1,0 +1,28 @@
+# Secrets and auth
+auth.json
+
+# Session and conversation state
+history.jsonl
+sessions/
+shell_snapshots/
+.codex-global-state.json
+internal_storage.json
+
+# Logs, caches, and temp files
+log/
+cache/
+tmp/
+models_cache.json
+vendor_imports/
+
+# SQLite and runtime state
+sqlite/
+state_*.sqlite
+state_*.sqlite-shm
+state_*.sqlite-wal
+
+# Local migration/runtime markers
+.personality_migration
+
+# OS/editor noise
+.DS_Store
