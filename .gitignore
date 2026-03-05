@@ -1,9 +1,13 @@
 # Secrets and auth
 auth.json
+.env
+.env.local
+.env.*.local
 
 # Session and conversation state
 history.jsonl
 sessions/
+session_index.jsonl
 shell_snapshots/
 .codex-global-state.json
 internal_storage.json

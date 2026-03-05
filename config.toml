@@ -2,6 +2,7 @@ model = "gpt-5.4"
 model_reasoning_effort = "medium"
 personality = "pragmatic"
 web_search = "cached"
+model_catalog_json = "/Users/liamvdb/.codex/models_catalog.json"
 
 # Execution defaults
 approval_policy = "on-request"
@@ -24,6 +25,12 @@ args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]
 [mcp_servers.mgrep]
 command = "mgrep"
 args = ["mcp"]
+
+[model_providers.litellm]
+name = "LiteLLM"
+base_url = "https://litellm.juphorizon.com/v1"
+env_key = "LITELLM_API_KEY"
+wire_api = "responses"
 
 # Profiles — switch with CODEX_PROFILE=<name>
 [profiles.strict]
@@ -85,6 +92,26 @@ config_file = "agents/build_fixer.toml"
 description = "Playwright-focused UI debugger for reproducing browser issues, updating tests, and collecting artifacts."
 nickname_candidates = ["Playwright", "Browser"]
 config_file = "agents/playwright_debugger.toml"
+
+[agents.kimi_worker]
+description = "Implementation-focused worker using Kimi K2.5 through LiteLLM."
+nickname_candidates = ["Kimi Worker", "Moonshot Builder"]
+config_file = "agents/kimi_worker.toml"
+
+[agents.glm_worker]
+description = "Implementation-focused worker using GLM-5 through LiteLLM."
+nickname_candidates = ["GLM Worker", "Zhipu Builder"]
+config_file = "agents/glm_worker.toml"
+
+[agents.kimi_consult]
+description = "Read-only diverse-opinion consultant using Kimi K2.5 through LiteLLM."
+nickname_candidates = ["Kimi Consult", "Moonshot Scout"]
+config_file = "agents/kimi_consult.toml"
+
+[agents.glm_consult]
+description = "Read-only diverse-opinion consultant using GLM-5 through LiteLLM."
+nickname_candidates = ["GLM Consult", "Zhipu Scout"]
+config_file = "agents/glm_consult.toml"
 
 [projects]
 [projects."/Users/liamvdb/.config/opencode"]
