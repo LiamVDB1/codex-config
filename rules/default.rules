@@ -2,3 +2,8 @@ prefix_rule(pattern=["python", "-m", "pip", "install", "-r", "requirements.txt",
 prefix_rule(pattern=["./gradlew", "build"], decision="allow")
 prefix_rule(pattern=["gh", "pr"], decision="allow")
 prefix_rule(pattern=["gh", "api"], decision="allow")
+prefix_rule(pattern=["corepack", "pnpm", "install"], decision="allow")
+prefix_rule(pattern=["corepack", "pnpm", "exec", "playwright", "test"], decision="allow")
+prefix_rule(pattern=["corepack", "pnpm", "exec", "playwright", "install"], decision="allow")
+prefix_rule(pattern=["corepack", "pnpm", "exec", "tsx", "--test"], decision="allow")
+prefix_rule(pattern=["corepack", "pnpm", "dev"], decision="allow")

@@ -1,5 +1,5 @@
 model = "gpt-5.4"
-model_reasoning_effort = "medium"
+model_reasoning_effort = "high"
 personality = "pragmatic"
 web_search = "cached"
 model_catalog_json = "/Users/liamvdb/.codex/models_catalog.json"
@@ -9,6 +9,14 @@ approval_policy = "on-request"
 sandbox_mode = "workspace-write"
 
 [mcp_servers]
+
+[mcp_servers.stitch]
+url = "https://stitch.googleapis.com/mcp"
+env_http_headers = { "X-Goog-Api-Key" = "STITCH_API_KEY" }
+
+[mcp_servers.magic]
+command = "bash"
+args = ["-lc", "npx -y @21st-dev/magic@latest API_KEY=\"$TWENTYFIRSTDEV_API_KEY\""]
 
 [mcp_servers.context7]
 command = "npx"
@@ -95,22 +103,22 @@ config_file = "agents/playwright_debugger.toml"
 
 [agents.kimi_worker]
 description = "Implementation-focused worker using Kimi K2.5 through LiteLLM."
-nickname_candidates = ["Kimi Worker", "Moonshot Builder"]
+nickname_candidates = ["Kimi Worker"]
 config_file = "agents/kimi_worker.toml"
 
 [agents.glm_worker]
 description = "Implementation-focused worker using GLM-5 through LiteLLM."
-nickname_candidates = ["GLM Worker", "Zhipu Builder"]
+nickname_candidates = ["GLM Worker"]
 config_file = "agents/glm_worker.toml"
 
 [agents.kimi_consult]
 description = "Read-only diverse-opinion consultant using Kimi K2.5 through LiteLLM."
-nickname_candidates = ["Kimi Consult", "Moonshot Scout"]
+nickname_candidates = ["Kimi Consult"]
 config_file = "agents/kimi_consult.toml"
 
 [agents.glm_consult]
 description = "Read-only diverse-opinion consultant using GLM-5 through LiteLLM."
-nickname_candidates = ["GLM Consult", "Zhipu Scout"]
+nickname_candidates = ["GLM Consult"]
 config_file = "agents/glm_consult.toml"
 
 [projects]
@@ -135,6 +143,7 @@ multi_agent = true
 js_repl = true
 prevent_idle_sleep = true
 undo = true
+rmcp_client = true
 
 [tui]
 status_line = ["model-with-reasoning", "context-remaining", "current-dir", "five-hour-limit", "weekly-limit"]

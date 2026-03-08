@@ -30,3 +30,4 @@ state_*.sqlite-wal
 
 # OS/editor noise
 .DS_Store
+*__pycache__*

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gemini Delegate"
+  short_description: "Consult Gemini CLI for second opinions"
+  default_prompt: "Use $gemini-delegate to get a structured second opinion from Gemini before I implement this change."
