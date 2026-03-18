@@ -51,6 +51,8 @@ I did not find evidence that normal Codex request traffic sends a separate stabl
 4. Run `bin/codex-account.mjs save personal`
 5. Run `bin/codex-account.mjs list`
 6. Switch manually with `bin/codex-account.mjs switch work`
+7. Or launch directly with a specific saved account via `bin/codex-account.mjs run work -- <codex args>`
+8. Rename a label later with `bin/codex-account.mjs rename work work-main`
 
 ## Automatic selection
 
@@ -67,8 +69,11 @@ You can preview the choice without launching Codex:
 ```bash
 bin/codex-account.mjs best --probe
 bin/codex-account.mjs switch-best --probe --dry-run
+bin/codex-account.mjs run work --dry-run
 bin/codex-smart.mjs --no-probe --dry-run
 ```
+
+The `list`, `best`, and `probe` views now show a cleaner per-account summary, including the saved live-limit snapshot and the weekly reset time when a probe is available.
 
 ## Notes
 

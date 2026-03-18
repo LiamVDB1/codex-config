@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 
 import {
   decodeJwtPayload,
@@ -17,9 +19,14 @@ import {
 import {
   normalizeCodexHome,
   getStorePaths,
+  listSavedAccounts,
   saveCurrentAccount,
   switchToSavedAccount,
+  updateProbeResult,
 } from '../lib/codex-account-switcher/store.mjs';
+
+const execFileAsync = promisify(execFile);
+const cliPath = path.resolve('bin/codex-account.mjs');
 
 function makeJwt(payload) {
   const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
@@ -29,6 +36,31 @@ function makeJwt(payload) {
 
 async function makeTempCodexHome() {
   return fs.mkdtemp(path.join(os.tmpdir(), 'codex-account-switcher-'));
+}
+
+function buildChatGptAuth({ accountId, planType, email, refreshToken, sessionId = null }) {
+  return {
+    OPENAI_API_KEY: null,
+    tokens: {
+      access_token: makeJwt({
+        exp: 1_900_000_000,
+        ...(sessionId ? { session_id: sessionId } : {}),
+        'https://api.openai.com/auth': {
+          chatgpt_account_id: accountId,
+          chatgpt_plan_type: planType,
+        },
+        'https://api.openai.com/profile': {
+          email,
+        },
+      }),
+      refresh_token: refreshToken,
+      account_id: accountId,
+    },
+  };
+}
+
+function stripAnsi(text) {
+  return text.replace(/\x1b\[[0-9;]*m/g, '');
 }
 
 test('decodeJwtPayload reads base64url JWT payloads', () => {
@@ -139,6 +171,111 @@ test('rankSavedAccount uses live quota headroom as the tie-breaker within the sa
   });
 
   assert.ok(roomy.sortKey > nearlySpent.sortKey);
+});
+
+test('codex-account run --dry-run accepts an explicit saved account label', async () => {
+  const codexHome = await makeTempCodexHome();
+  await fs.writeFile(path.join(codexHome, 'config.toml'), 'model = "gpt-5.4"\n');
+
+  const workAuth = buildChatGptAuth({
+    accountId: 'acct-work',
+    planType: 'team',
+    email: 'work@example.com',
+    refreshToken: 'refresh-work',
+    sessionId: 'authsess_work',
+  });
+  await fs.writeFile(path.join(codexHome, 'auth.json'), JSON.stringify(workAuth, null, 2));
+  await saveCurrentAccount(codexHome, 'work');
+
+  const personalAuth = buildChatGptAuth({
+    accountId: 'acct-personal',
+    planType: 'plus',
+    email: 'personal@example.com',
+    refreshToken: 'refresh-personal',
+    sessionId: 'authsess_personal',
+  });
+  await fs.writeFile(path.join(codexHome, 'auth.json'), JSON.stringify(personalAuth, null, 2));
+  await saveCurrentAccount(codexHome, 'personal');
+
+  const { stdout } = await execFileAsync(
+    process.execPath,
+    [cliPath, 'run', 'work', '--dry-run', '--json', '--codex-home', codexHome],
+    { cwd: path.dirname(cliPath) },
+  );
+
+  const result = JSON.parse(stdout);
+  assert.equal(result.selectionMode, 'explicit');
+  assert.equal(result.selected.label, 'work');
+  assert.equal(result.selected.summary.email, 'work@example.com');
+  assert.equal(result.launchCodexHome, codexHome);
+});
+
+test('codex-account list shows weekly reset info in formatted output', async () => {
+  const codexHome = await makeTempCodexHome();
+  await fs.writeFile(path.join(codexHome, 'config.toml'), 'model = "gpt-5.4"\n');
+
+  const workAuth = buildChatGptAuth({
+    accountId: 'acct-work',
+    planType: 'team',
+    email: 'work@example.com',
+    refreshToken: 'refresh-work',
+    sessionId: 'authsess_work',
+  });
+  await fs.writeFile(path.join(codexHome, 'auth.json'), JSON.stringify(workAuth, null, 2));
+  await saveCurrentAccount(codexHome, 'work');
+  await updateProbeResult(codexHome, 'work', {
+    success: true,
+    probedAt: '2026-03-18T10:00:00.000Z',
+    rateLimits: {
+      primary: { usedPercent: 12, windowDurationMins: 300, resetsAt: 1_900_000_000 },
+      secondary: { usedPercent: 30, windowDurationMins: 10_080, resetsAt: 1_900_000_000 },
+    },
+  });
+
+  const { stdout } = await execFileAsync(
+    process.execPath,
+    [cliPath, 'list', '--codex-home', codexHome],
+    {
+      cwd: path.dirname(cliPath),
+      env: {
+        ...process.env,
+        FORCE_COLOR: '1',
+      },
+    },
+  );
+
+  const output = stripAnsi(stdout);
+  assert.match(output, /\* work \[TEAM\] \[current\] \[live probe\]/);
+  assert.match(output, /Limits\s+5h 88% free, 7d 70% free/);
+  assert.match(output, /Weekly reset\s+Mar 17, 2030/);
+  assert.match(output, /Last probe\s+Mar 18, 2026/);
+});
+
+test('codex-account rename updates the saved label', async () => {
+  const codexHome = await makeTempCodexHome();
+  await fs.writeFile(path.join(codexHome, 'config.toml'), 'model = "gpt-5.4"\n');
+
+  const workAuth = buildChatGptAuth({
+    accountId: 'acct-work',
+    planType: 'team',
+    email: 'work@example.com',
+    refreshToken: 'refresh-work',
+    sessionId: 'authsess_work',
+  });
+  await fs.writeFile(path.join(codexHome, 'auth.json'), JSON.stringify(workAuth, null, 2));
+  await saveCurrentAccount(codexHome, 'work');
+
+  const { stdout } = await execFileAsync(
+    process.execPath,
+    [cliPath, 'rename', 'work', 'work-main', '--json', '--codex-home', codexHome],
+    { cwd: path.dirname(cliPath) },
+  );
+
+  const renamed = JSON.parse(stdout);
+  assert.equal(renamed.label, 'work-main');
+
+  const accounts = await listSavedAccounts(codexHome);
+  assert.deepEqual(accounts.map((account) => account.label), ['work-main']);
 });
 
 test('saveCurrentAccount snapshots auth and global state and seeds a profile home', async () => {

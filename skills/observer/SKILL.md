@@ -1,17 +1,19 @@
 ---
 name: observer
-description: Monitor one long-running task, workflow, agent run, test session, or pipeline execution in sleep/wake cycles, append targeted observations to a run-specific notes file, distinguish runtime failures from behavioral or product issues, fix concrete execution bugs during the same session, and finish with a prioritized improvement summary. Use when a user wants continuous observation, attach-and-monitor behavior, cycle-based diagnostics, or a post-run assessment grounded in one real execution.
+description: Monitor one long-running task, workflow, agent run, test session, or pipeline execution in sleep/wake cycles, append targeted observations to a run-specific notes file, distinguish runtime failures from behavioral or product issues, fix concrete execution bugs during the same session, and finish with a prioritized improvement summary. The observer may stop early once it has enough evidence for the specific issue it is targeting and continuing the run is unlikely to change the diagnosis. Use when a user wants continuous observation, attach-and-monitor behavior, cycle-based diagnostics, or a post-run assessment grounded in one real execution.
 ---
 
 # Observer
 
 ## Overview
 
-Observe one real execution from start to finish. Watch it in sleep/wake batches, append
-decision-relevant findings to a run-specific notes file, fix concrete runtime failures without
-switching targets, and finish with a prioritized assessment of what should improve next.
+Observe one real execution. Watch it in sleep/wake batches, append decision-relevant findings to a
+run-specific notes file, fix concrete runtime failures without switching targets, and finish with
+a prioritized assessment of what should improve next.
 
-Stay anchored to one target only unless the user explicitly asks for multiple runs.
+Stay anchored to one target only unless the user explicitly asks for multiple runs. You do not
+need to wait for full completion if the targeted issue is already well understood and further
+waiting is unlikely to add meaningful signal.
 
 ## Workflow
 
@@ -74,7 +76,23 @@ Recommended protocol structure:
   - database state
   - screenshots or reports
 
-### 4. Separate issue types cleanly
+### 4. Stop early when the evidence is sufficient
+
+- Do not keep waiting just because the target is still alive.
+- If you have enough evidence for the specific issue you are targeting, you may stop observation
+  mid-run and move directly into changes.
+- Good early-stop conditions:
+  - the failure mode or behavioral issue is already clear
+  - the relevant stage has repeated the same pattern multiple times
+  - additional wake cycles are only adding more examples, not new understanding
+  - you already know the concrete fix or prompt/runtime change to make
+- When stopping early:
+  - record the stop point and reason in the monitor file
+  - state what evidence was sufficient
+  - note what further evidence you are intentionally not waiting for
+  - make the change immediately if that is the next useful step
+
+### 5. Separate issue types cleanly
 
 Always classify findings clearly. Common buckets:
 
@@ -108,7 +126,7 @@ Always classify findings clearly. Common buckets:
 Do not misclassify blocked external systems as internal runtime bugs unless the local stack is
 actually malfunctioning.
 
-### 5. Fix concrete runtime failures during the same session
+### 6. Fix concrete runtime failures during the same session
 
 - If the observed execution fails for a concrete engineering reason, fix it during the monitoring
   session when feasible.
@@ -132,9 +150,9 @@ Examples that usually do not require immediate code changes mid-run:
 
 Record those as improvement opportunities unless they prevent the run from continuing.
 
-### 6. End with a real synthesis
+### 7. End with a real synthesis
 
-When the target finishes:
+When the target finishes, or when you intentionally stop observation early:
 
 - append a final assessment section to the monitor file
 - summarize:
@@ -142,6 +160,7 @@ When the target finishes:
   - what is still weak
   - what improved versus earlier runs, if relevant
   - the highest-priority changes to make next
+  - whether the run was observed to completion or stopped early on purpose
 
 Prefer a short prioritized list over a long brainstorm.
 
@@ -152,6 +171,8 @@ Prefer a short prioritized list over a long brainstorm.
 - Prefer strong, specific observations over transcript copying.
 - Treat cost, latency, retry churn, and repeated weak loops as real findings.
 - Separate execution failures from product-quality failures.
+- Stop as soon as the targeted diagnosis is stable enough to act on; do not wait for ceremonial
+  completion.
 
 ## Output Expectations
 
@@ -161,3 +182,4 @@ Leave behind a monitor file that another engineer can open cold and still unders
 - where the system is weak
 - which issues were runtime bugs versus behavioral/product issues
 - what should change next, in priority order
+- whether observation ended because the run completed or because you had enough evidence already

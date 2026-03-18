@@ -1,7 +1,7 @@
 interface:
   display_name: "Observer"
   short_description: "Monitor one live run or workflow"
-  default_prompt: "Use $observer to monitor one real run, workflow, or long-running task end to end."
+  default_prompt: "Use $observer to monitor one real run, workflow, or long-running task, and stop early if the targeted issue is already sufficiently evidenced."
 
 policy:
   allow_implicit_invocation: true
