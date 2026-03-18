@@ -2,7 +2,7 @@ model = "gpt-5.4"
 model_reasoning_effort = "xhigh"
 personality = "pragmatic"
 web_search = "cached"
-model_catalog_json = "/Users/liamvdb/.codex/models_catalog.json"
+model_catalog_json = "${HOME}/.codex/models_catalog.json"
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
 
@@ -32,9 +32,10 @@ args = [ "-y", "@modelcontextprotocol/server-sequential-thinking" ]
 command = "mgrep"
 args = [ "mcp" ]
 
-[mcp_servers.pencil]
-command = "/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64"
-args = [ "--app", "desktop" ]
+# Pencil MCP server - macOS only
+# [mcp_servers.pencil]
+# command = "/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64"
+# args = [ "--app", "desktop" ]
 
 [model_providers.litellm]
 name = "LiteLLM"
@@ -125,37 +126,28 @@ description = "Read-only diverse-opinion consultant using GLM-5 through LiteLLM.
 nickname_candidates = [ "GLM Consult" ]
 config_file = "agents/glm_consult.toml"
 
-[projects."/Users/liamvdb/.config/opencode"]
+[projects."${HOME}/.config/opencode"]
 trust_level = "trusted"
 
-[projects."/Users/liamvdb/Workspace/Reference/everything-claude-code"]
+[projects."${HOME}/Workspace/Reference/everything-claude-code"]
 trust_level = "trusted"
 
-[projects."/Users/liamvdb/Workspace/Active/Work/horizon-ui"]
+[projects."${HOME}/Workspace/Active/Work/horizon-ui"]
 trust_level = "trusted"
 
-[projects."/Users/liamvdb/Workspace/Active/Work/truth_engine"]
+[projects."${HOME}/Workspace/Active/Work/truth_engine"]
 trust_level = "trusted"
 
-[projects."/Users/liamvdb/Workspace/Active/Work"]
+[projects."${HOME}/Workspace/Active/Work"]
 trust_level = "trusted"
 
-[projects."/Users/liamvdb/.codex"]
+[projects."${HOME}/.codex"]
 trust_level = "trusted"
 
 [projects."/"]
 trust_level = "trusted"
 
-[projects."/Users/liamvdb/Workspace/Active/School/Selab2"]
-trust_level = "trusted"
-
-[projects."/Users/liamvdb/.gemini"]
-trust_level = "trusted"
-
-[projects."/Users/liamvdb"]
-trust_level = "trusted"
-
-[projects."/Users/liamvdb/.claude"]
+[projects."${HOME}/Workspace/Active/School/Selab2"]
 trust_level = "trusted"
 
 [notice]
