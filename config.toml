@@ -1,5 +1,5 @@
-model = "gpt-5.4-mini"
-model_reasoning_effort = "medium"
+model = "gpt-5.4"
+model_reasoning_effort = "high"
 personality = "pragmatic"
 web_search = "live"
 model_catalog_json = "models_catalog.json"
@@ -129,6 +129,9 @@ nickname_candidates = [ "GLM Consult" ]
 config_file = "agents/glm_consult.toml"
 
 [projects."/"]
+trust_level = "trusted"
+
+[projects."/home/opc/.codex"]
 trust_level = "trusted"
 
 [notice]
