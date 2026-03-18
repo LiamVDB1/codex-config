@@ -2,7 +2,7 @@ model = "gpt-5.4-mini"
 model_reasoning_effort = "medium"
 personality = "pragmatic"
 web_search = "live"
-model_catalog_json = "/Users/liamvdb/.codex/models_catalog.json"
+model_catalog_json = "models_catalog.json"
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
 
@@ -128,31 +128,7 @@ description = "Read-only diverse-opinion consultant using GLM-5 through LiteLLM.
 nickname_candidates = [ "GLM Consult" ]
 config_file = "agents/glm_consult.toml"
 
-[projects."/Users/liamvdb/.config/opencode"]
-trust_level = "trusted"
-
-[projects."/Users/liamvdb/Workspace/Reference/everything-claude-code"]
-trust_level = "trusted"
-
-[projects."/Users/liamvdb/Workspace/Active/Work/horizon-ui"]
-trust_level = "trusted"
-
-[projects."/Users/liamvdb/Workspace/Active/Work/truth_engine"]
-trust_level = "trusted"
-
-[projects."/Users/liamvdb/Workspace/Active/Work"]
-trust_level = "trusted"
-
-[projects."/Users/liamvdb/.codex"]
-trust_level = "trusted"
-
 [projects."/"]
-trust_level = "trusted"
-
-[projects."/Users/liamvdb/Workspace/Active/School/Selab2"]
-trust_level = "trusted"
-
-[projects."/Users/liamvdb"]
 trust_level = "trusted"
 
 [notice]
