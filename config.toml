@@ -2,7 +2,7 @@ model = "gpt-5.4"
 model_reasoning_effort = "xhigh"
 personality = "pragmatic"
 web_search = "cached"
-model_catalog_json = "${HOME}/.codex/models_catalog.json"
+model_catalog_json = "/home/opc/.codex/models_catalog.json"
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
 
@@ -126,28 +126,28 @@ description = "Read-only diverse-opinion consultant using GLM-5 through LiteLLM.
 nickname_candidates = [ "GLM Consult" ]
 config_file = "agents/glm_consult.toml"
 
-[projects."${HOME}/.config/opencode"]
+[projects."/home/opc/.config/opencode"]
 trust_level = "trusted"
 
-[projects."${HOME}/Workspace/Reference/everything-claude-code"]
+[projects."/home/opc/Workspace/Reference/everything-claude-code"]
 trust_level = "trusted"
 
-[projects."${HOME}/Workspace/Active/Work/horizon-ui"]
+[projects."/home/opc/Workspace/Active/Work/horizon-ui"]
 trust_level = "trusted"
 
-[projects."${HOME}/Workspace/Active/Work/truth_engine"]
+[projects."/home/opc/Workspace/Active/Work/truth_engine"]
 trust_level = "trusted"
 
-[projects."${HOME}/Workspace/Active/Work"]
+[projects."/home/opc/Workspace/Active/Work"]
 trust_level = "trusted"
 
-[projects."${HOME}/.codex"]
+[projects."/home/opc/.codex"]
 trust_level = "trusted"
 
 [projects."/"]
 trust_level = "trusted"
 
-[projects."${HOME}/Workspace/Active/School/Selab2"]
+[projects."/home/opc/Workspace/Active/School/Selab2"]
 trust_level = "trusted"
 
 [notice]
