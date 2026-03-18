@@ -88,7 +88,7 @@ def parse_args() -> argparse.Namespace:
             "Defaults to a safe allowlist that excludes known-broken local servers."
         ),
     )
-    parser.add_argument("--model", help="Gemini model override.")
+    parser.add_argument("--model", default="gemini-3.1-pro-preview", help="Gemini model override.")
     parser.add_argument(
         "--stance",
         choices=["balanced", "adversarial", "security", "performance"],

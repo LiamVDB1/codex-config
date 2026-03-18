@@ -103,7 +103,7 @@ def parse_args() -> argparse.Namespace:
         help="Extra review instruction.",
     )
     parser.add_argument("--prompt-file", help="File containing extra review instruction.")
-    parser.add_argument("--model", help="Gemini model override.")
+    parser.add_argument("--model", default="gemini-3.1-pro-preview", help="Gemini model override.")
     parser.add_argument(
         "--allowed-mcp-server-name",
         action="append",

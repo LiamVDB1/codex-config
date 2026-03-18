@@ -1,38 +1,40 @@
 model = "gpt-5.4"
-model_reasoning_effort = "high"
+model_reasoning_effort = "xhigh"
 personality = "pragmatic"
 web_search = "cached"
 model_catalog_json = "/Users/liamvdb/.codex/models_catalog.json"
-
-# Execution defaults
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
 
-[mcp_servers]
-
 [mcp_servers.stitch]
 url = "https://stitch.googleapis.com/mcp"
-env_http_headers = { "X-Goog-Api-Key" = "STITCH_API_KEY" }
+
+[mcp_servers.stitch.env_http_headers]
+X-Goog-Api-Key = "STITCH_API_KEY"
 
 [mcp_servers.magic]
 command = "bash"
-args = ["-lc", "npx -y @21st-dev/magic@latest API_KEY=\"$TWENTYFIRSTDEV_API_KEY\""]
+args = [ "-lc", "npx -y @21st-dev/magic@latest API_KEY=\"$TWENTYFIRSTDEV_API_KEY\"" ]
 
 [mcp_servers.context7]
 command = "npx"
-args = ["-y", "@upstash/context7-mcp@latest"]
+args = [ "-y", "@upstash/context7-mcp@latest" ]
 
 [mcp_servers.memory]
 command = "npx"
-args = ["-y", "@modelcontextprotocol/server-memory"]
+args = [ "-y", "@modelcontextprotocol/server-memory" ]
 
 [mcp_servers.sequential-thinking]
 command = "npx"
-args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+args = [ "-y", "@modelcontextprotocol/server-sequential-thinking" ]
 
 [mcp_servers.mgrep]
 command = "mgrep"
-args = ["mcp"]
+args = [ "mcp" ]
+
+[mcp_servers.pencil]
+command = "/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64"
+args = [ "--app", "desktop" ]
 
 [model_providers.litellm]
 name = "LiteLLM"
@@ -40,7 +42,6 @@ base_url = "https://litellm.juphorizon.com/v1"
 env_key = "LITELLM_API_KEY"
 wire_api = "responses"
 
-# Profiles — switch with CODEX_PROFILE=<name>
 [profiles.strict]
 approval_policy = "on-request"
 sandbox_mode = "read-only"
@@ -61,6 +62,9 @@ sandbox_mode = "workspace-write"
 approval_policy = "never"
 sandbox_mode = "workspace-write"
 
+[profiles.litellm_consult.features]
+js_repl = false
+
 [agents]
 max_threads = 6
 max_depth = 1
@@ -68,60 +72,59 @@ job_max_runtime_seconds = 1800
 
 [agents.explorer]
 description = "Read-only codebase mapper for specific codebase questions, patterns, and file-level guidance."
-nickname_candidates = ["Scout", "Mapper"]
+nickname_candidates = [ "Scout", "Mapper" ]
 config_file = "agents/explorer.toml"
 
 [agents.worker]
 description = "Implementation-focused agent for bounded code changes with clear file ownership."
-nickname_candidates = ["Builder", "Implementer"]
+nickname_candidates = [ "Builder", "Implementer" ]
 config_file = "agents/worker.toml"
 
 [agents.planner]
 description = "Turns ambiguous work into an incremental implementation plan with dependencies and risks."
-nickname_candidates = ["Planner", "Strategist"]
+nickname_candidates = [ "Planner", "Strategist" ]
 config_file = "agents/planner.toml"
 
 [agents.reviewer]
 description = "Read-only code reviewer focused on correctness, regressions, security, and missing tests."
-nickname_candidates = ["Reviewer", "Inspector"]
+nickname_candidates = [ "Reviewer", "Inspector" ]
 config_file = "agents/reviewer.toml"
 
 [agents.security_reviewer]
 description = "Read-only security reviewer for trust boundaries, auth, secrets, input handling, and abuse cases."
-nickname_candidates = ["Security", "Sentinel"]
+nickname_candidates = [ "Security", "Sentinel" ]
 config_file = "agents/security_reviewer.toml"
 
 [agents.build_fixer]
 description = "Minimal-diff fixer for build, typecheck, test, and configuration breakages."
-nickname_candidates = ["Fixer", "Compiler"]
+nickname_candidates = [ "Fixer", "Compiler" ]
 config_file = "agents/build_fixer.toml"
 
 [agents.playwright_debugger]
 description = "Playwright-focused UI debugger for reproducing browser issues, updating tests, and collecting artifacts."
-nickname_candidates = ["Playwright", "Browser"]
+nickname_candidates = [ "Playwright", "Browser" ]
 config_file = "agents/playwright_debugger.toml"
 
 [agents.kimi_worker]
 description = "Implementation-focused worker using Kimi K2.5 through LiteLLM."
-nickname_candidates = ["Kimi Worker"]
+nickname_candidates = [ "Kimi Worker" ]
 config_file = "agents/kimi_worker.toml"
 
 [agents.glm_worker]
 description = "Implementation-focused worker using GLM-5 through LiteLLM."
-nickname_candidates = ["GLM Worker"]
+nickname_candidates = [ "GLM Worker" ]
 config_file = "agents/glm_worker.toml"
 
 [agents.kimi_consult]
 description = "Read-only diverse-opinion consultant using Kimi K2.5 through LiteLLM."
-nickname_candidates = ["Kimi Consult"]
+nickname_candidates = [ "Kimi Consult" ]
 config_file = "agents/kimi_consult.toml"
 
 [agents.glm_consult]
 description = "Read-only diverse-opinion consultant using GLM-5 through LiteLLM."
-nickname_candidates = ["GLM Consult"]
+nickname_candidates = [ "GLM Consult" ]
 config_file = "agents/glm_consult.toml"
 
-[projects]
 [projects."/Users/liamvdb/.config/opencode"]
 trust_level = "trusted"
 
@@ -129,6 +132,30 @@ trust_level = "trusted"
 trust_level = "trusted"
 
 [projects."/Users/liamvdb/Workspace/Active/Work/horizon-ui"]
+trust_level = "trusted"
+
+[projects."/Users/liamvdb/Workspace/Active/Work/truth_engine"]
+trust_level = "trusted"
+
+[projects."/Users/liamvdb/Workspace/Active/Work"]
+trust_level = "trusted"
+
+[projects."/Users/liamvdb/.codex"]
+trust_level = "trusted"
+
+[projects."/"]
+trust_level = "trusted"
+
+[projects."/Users/liamvdb/Workspace/Active/School/Selab2"]
+trust_level = "trusted"
+
+[projects."/Users/liamvdb/.gemini"]
+trust_level = "trusted"
+
+[projects."/Users/liamvdb"]
+trust_level = "trusted"
+
+[projects."/Users/liamvdb/.claude"]
 trust_level = "trusted"
 
 [notice]
@@ -146,4 +173,7 @@ undo = true
 rmcp_client = true
 
 [tui]
-status_line = ["model-with-reasoning", "context-remaining", "current-dir", "five-hour-limit", "weekly-limit"]
+status_line = [ "model-with-reasoning", "context-remaining", "current-dir", "five-hour-limit", "weekly-limit" ]
+
+[sandbox_workspace_write]
+network_access = true

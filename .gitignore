@@ -1,5 +1,6 @@
 # Secrets and auth
 auth.json
+accounts/
 .env
 .env.local
 .env.*.local
@@ -11,6 +12,9 @@ session_index.jsonl
 shell_snapshots/
 .codex-global-state.json
 internal_storage.json
+archived_sessions/
+*.sqlite*
+worktrees/
 
 # Logs, caches, and temp files
 log/

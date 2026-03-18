@@ -80,7 +80,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--branch", help="Branch name. Defaults to gemini/<session-name>.")
     parser.add_argument("--prompt", help="Initial worker prompt.")
     parser.add_argument("--prompt-file", help="File containing the initial worker prompt.")
-    parser.add_argument("--model", help="Gemini model override.")
+    parser.add_argument("--model", default="gemini-3.1-pro-preview", help="Gemini model override.")
     parser.add_argument(
         "--approval-mode",
         choices=["default", "auto_edit", "yolo", "plan"],

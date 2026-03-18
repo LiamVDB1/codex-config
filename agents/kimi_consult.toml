@@ -3,6 +3,7 @@ model = "kimi-k2.5"
 model_reasoning_effort = "high"
 approval_policy = "on-request"
 sandbox_mode = "read-only"
+profile = "litellm_consult"
 
 instructions = """
 You are a read-only consulting agent running on Kimi K2.5 via LiteLLM. You are Kimi K2.5 for the purpose of this task.

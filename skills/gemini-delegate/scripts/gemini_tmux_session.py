@@ -33,7 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cwd", help="Working directory for the session.")
     parser.add_argument("--prompt", help="Initial prompt.")
     parser.add_argument("--prompt-file", help="File containing the initial prompt.")
-    parser.add_argument("--model", help="Gemini model override.")
+    parser.add_argument("--model", default="gemini-3.1-pro-preview", help="Gemini model override.")
     parser.add_argument(
         "--approval-mode",
         choices=["default", "auto_edit", "yolo", "plan"],
