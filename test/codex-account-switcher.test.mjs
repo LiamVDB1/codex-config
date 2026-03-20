@@ -146,8 +146,8 @@ test('sortSavedAccounts prefers higher plan tiers when live limits are unavailab
   assert.equal(sorted[1].label, 'personal');
 });
 
-test('rankSavedAccount uses live quota headroom as the tie-breaker within the same plan', () => {
-  const nearlySpent = rankSavedAccount({
+test('sortSavedAccounts prefers the more-drained account within the same plan tier', () => {
+  const nearlySpent = {
     label: 'busy',
     summary: { planType: 'pro', email: 'busy@example.com' },
     lastProbe: {
@@ -157,8 +157,8 @@ test('rankSavedAccount uses live quota headroom as the tie-breaker within the sa
         secondary: { usedPercent: 40, windowDurationMins: 10_080, resetsAt: 1_900_000_000 },
       },
     },
-  });
-  const roomy = rankSavedAccount({
+  };
+  const roomy = {
     label: 'roomy',
     summary: { planType: 'pro', email: 'roomy@example.com' },
     lastProbe: {
@@ -168,9 +168,121 @@ test('rankSavedAccount uses live quota headroom as the tie-breaker within the sa
         secondary: { usedPercent: 15, windowDurationMins: 10_080, resetsAt: 1_900_000_000 },
       },
     },
-  });
+  };
 
-  assert.ok(roomy.sortKey > nearlySpent.sortKey);
+  assert.ok(rankSavedAccount(nearlySpent).sortKey > rankSavedAccount(roomy).sortKey);
+  assert.equal(sortSavedAccounts([nearlySpent, roomy])[0].label, 'busy');
+  assert.equal(sortSavedAccounts([roomy, nearlySpent])[0].label, 'busy');
+});
+
+test('sortSavedAccounts drains weekly quota before switching within the same plan tier', () => {
+  const weeklyDrained = {
+    label: 'weekly-drained',
+    summary: { planType: 'pro', email: 'weekly-drained@example.com' },
+    lastProbe: {
+      success: true,
+      rateLimits: {
+        primary: { usedPercent: 20, windowDurationMins: 300, resetsAt: 1_900_000_000 },
+        secondary: { usedPercent: 90, windowDurationMins: 10_080, resetsAt: 1_900_000_000 },
+      },
+    },
+  };
+  const weeklyRoomy = {
+    label: 'weekly-roomy',
+    summary: { planType: 'pro', email: 'weekly-roomy@example.com' },
+    lastProbe: {
+      success: true,
+      rateLimits: {
+        primary: { usedPercent: 30, windowDurationMins: 300, resetsAt: 1_900_000_000 },
+        secondary: { usedPercent: 55, windowDurationMins: 10_080, resetsAt: 1_900_000_000 },
+      },
+    },
+  };
+
+  assert.equal(sortSavedAccounts([weeklyRoomy, weeklyDrained])[0].label, 'weekly-drained');
+});
+
+test('sortSavedAccounts prefers the account whose quota is closer to reset', () => {
+  const now = Math.floor(Date.now() / 1000);
+  const closeReset = {
+    label: 'close-reset',
+    summary: { planType: 'pro', email: 'close-reset@example.com' },
+    lastProbe: {
+      success: true,
+      rateLimits: {
+        primary: { usedPercent: 60, windowDurationMins: 300, resetsAt: now + 30 * 60 },
+        secondary: { usedPercent: 15, windowDurationMins: 10_080, resetsAt: now + 5 * 24 * 60 * 60 },
+      },
+    },
+  };
+  const slowerReset = {
+    label: 'slower-reset',
+    summary: { planType: 'pro', email: 'slower-reset@example.com' },
+    lastProbe: {
+      success: true,
+      rateLimits: {
+        primary: { usedPercent: 75, windowDurationMins: 300, resetsAt: now + 4 * 60 * 60 },
+        secondary: { usedPercent: 15, windowDurationMins: 10_080, resetsAt: now + 5 * 24 * 60 * 60 },
+      },
+    },
+  };
+
+  assert.equal(sortSavedAccounts([slowerReset, closeReset])[0].label, 'close-reset');
+});
+
+test('sortSavedAccounts switches away once a live window is fully drained', () => {
+  const weeklySpent = {
+    label: 'weekly-spent',
+    summary: { planType: 'pro', email: 'weekly-spent@example.com' },
+    lastProbe: {
+      success: true,
+      rateLimits: {
+        primary: { usedPercent: 20, windowDurationMins: 300, resetsAt: 1_900_000_000 },
+        secondary: { usedPercent: 100, windowDurationMins: 10_080, resetsAt: 1_900_000_000 },
+      },
+    },
+  };
+  const weeklyRoomy = {
+    label: 'weekly-roomy',
+    summary: { planType: 'pro', email: 'weekly-roomy@example.com' },
+    lastProbe: {
+      success: true,
+      rateLimits: {
+        primary: { usedPercent: 30, windowDurationMins: 300, resetsAt: 1_900_000_000 },
+        secondary: { usedPercent: 55, windowDurationMins: 10_080, resetsAt: 1_900_000_000 },
+      },
+    },
+  };
+
+  assert.equal(rankSavedAccount(weeklySpent).isDrained, true);
+  assert.equal(sortSavedAccounts([weeklyRoomy, weeklySpent])[0].label, 'weekly-roomy');
+});
+
+test('sortSavedAccounts prefers available quota over a drained higher-tier account', () => {
+  const drainedTeam = {
+    label: 'drained-team',
+    summary: { planType: 'team', email: 'team@example.com' },
+    lastProbe: {
+      success: true,
+      rateLimits: {
+        primary: { usedPercent: 100, windowDurationMins: 300, resetsAt: 1_900_000_000 },
+        secondary: { usedPercent: 100, windowDurationMins: 10_080, resetsAt: 1_900_000_000 },
+      },
+    },
+  };
+  const availablePlus = {
+    label: 'available-plus',
+    summary: { planType: 'plus', email: 'plus@example.com' },
+    lastProbe: {
+      success: true,
+      rateLimits: {
+        primary: { usedPercent: 25, windowDurationMins: 300, resetsAt: 1_900_000_000 },
+        secondary: { usedPercent: 40, windowDurationMins: 10_080, resetsAt: 1_900_000_000 },
+      },
+    },
+  };
+
+  assert.equal(sortSavedAccounts([drainedTeam, availablePlus])[0].label, 'available-plus');
 });
 
 test('codex-account run --dry-run accepts an explicit saved account label', async () => {
@@ -234,7 +346,7 @@ test('codex-account list shows weekly reset info in formatted output', async () 
 
   const { stdout } = await execFileAsync(
     process.execPath,
-    [cliPath, 'list', '--codex-home', codexHome],
+    [cliPath, 'list', '--no-probe', '--codex-home', codexHome],
     {
       cwd: path.dirname(cliPath),
       env: {
@@ -245,7 +357,7 @@ test('codex-account list shows weekly reset info in formatted output', async () 
   );
 
   const output = stripAnsi(stdout);
-  assert.match(output, /\* work \[TEAM\] \[current\] \[live probe\]/);
+  assert.match(output, /\* work \[TEAM\] \[current\] \[saved probe\]/);
   assert.match(output, /Limits\s+5h 88% free, 7d 70% free/);
   assert.match(output, /Weekly reset\s+Mar 17, 2030/);
   assert.match(output, /Last probe\s+Mar 18, 2026/);

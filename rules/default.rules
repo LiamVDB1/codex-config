@@ -16,3 +16,5 @@ prefix_rule(pattern=[".venv/bin/python", "-m", "truth_engine"], decision="allow"
 prefix_rule(pattern=["docker", "compose", "ps"], decision="allow")
 prefix_rule(pattern=["git", "add", "docker-compose.yml", "backend/Dockerfile", "backend/.env.example", "docs/deployment.md", "backend/docker/scraper-cron-entrypoint.sh"], decision="allow")
 prefix_rule(pattern=["docker", "compose", "exec"], decision="allow")
+prefix_rule(pattern=["git", "add", "src/truth_engine/activities/live.py", "src/truth_engine/adapters/llm/litellm_runner.py", "src/truth_engine/contracts/checkpoints.py", "src/truth_engine/prompts/agents/arena_scout/role.md", "src/truth_engine/services/run_trace.py", "src/truth_engine/services/hooks", "tests/unit/test_litellm_runner.py", "tests/unit/test_live_queue.py", "tests/unit/test_run_trace.py", "tests/unit/test_runner_hooks.py", "planning/innovation_lab"], decision="allow")
+prefix_rule(pattern=["git", "commit", "-m", "feat: add stateful scout hooks and innovation lab"], decision="allow")

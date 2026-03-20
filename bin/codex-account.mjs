@@ -22,12 +22,13 @@ function printHelp() {
 Commands:
   current                 Show the currently active Codex account
   save [label]            Save the current auth.json as a switchable snapshot
-  list [--probe]          List saved accounts, optionally refreshing live rate limits
+  list [--no-probe]       List saved accounts and refresh live rate limits by default
   rename <old> <new>      Rename a saved account label
   switch <label>          Replace auth.json with a saved account snapshot
   probe [label|all]       Refresh live rate-limit data for one or all saved accounts
-  best [--probe]          Show which saved account would be selected
-  switch-best [--probe]   Switch to the best saved account
+  best [--no-probe]       Show which saved account would be selected
+  switch-best [--no-probe]
+                         Switch to the best saved account
   run [label] [--no-probe] [--] [codex args...]
                          Launch codex with a specific saved account label, or the best account if no label matches
 
@@ -147,7 +148,11 @@ function formatStatusBadge(account) {
 
 function formatProbeBadge(account) {
   if (account.lastProbe?.success) {
-    return colorize('[live probe]', 'green');
+    if (account.probeSource === 'live') {
+      return colorize('[live probe]', 'green');
+    }
+
+    return colorize('[saved probe]', 'blue');
   }
 
   if (account.lastProbe?.success === false) {
@@ -318,13 +323,20 @@ function printAccounts(accounts, asJson) {
   console.log(sortSavedAccounts(accounts).map((account) => renderSavedAccount(account)).join('\n\n'));
 }
 
-async function probeOne(codexHome, label) {
-  const saved = await loadSavedAccount(codexHome, label);
+async function probeOne(codexHome, accountOrLabel) {
+  const savedAccounts = typeof accountOrLabel === 'string' ? await listSavedAccounts(codexHome) : null;
+  const account =
+    typeof accountOrLabel === 'string'
+      ? savedAccounts.find((entry) => entry.label === accountOrLabel) ?? { label: accountOrLabel }
+      : accountOrLabel;
+  const saved = await loadSavedAccount(codexHome, account.label);
   const probe = await probeAuthRateLimits(saved.auth, { cwd: codexHome });
   await updateProbeResult(codexHome, saved.label, probe);
   return {
     ...saved,
+    ...account,
     lastProbe: probe,
+    probeSource: 'live',
   };
 }
 
@@ -386,7 +398,8 @@ async function main(argv = process.argv.slice(2)) {
   const [command = 'help', firstArg, ...restArgs] = parsed.positionals;
   const asJson = parsed.flags.has('--json');
   const codexHome = resolveCodexHome(parsed.values.get('codexHome'));
-  const probe = parsed.flags.has('--probe');
+  const defaultsToLiveProbe = command === 'list' || command === 'best' || command === 'switch-best' || command === 'run';
+  const probe = parsed.flags.has('--no-probe') ? false : parsed.flags.has('--probe') || defaultsToLiveProbe;
 
   try {
     if (command === 'help' || command === '--help' || command === '-h') {
@@ -421,7 +434,7 @@ async function main(argv = process.argv.slice(2)) {
 
       const refreshed = [];
       for (const account of accounts) {
-        refreshed.push(await probeOne(codexHome, account.label));
+        refreshed.push(await probeOne(codexHome, account));
       }
       printAccounts(refreshed, asJson);
       return 0;
@@ -524,7 +537,7 @@ async function main(argv = process.argv.slice(2)) {
             dryRun: parsed.flags.has('--dry-run'),
           })
         : await runCodexWithBestAccount(codexHome, codexArgs, {
-            probe: !parsed.flags.has('--no-probe'),
+            probe,
             dryRun: parsed.flags.has('--dry-run'),
           });
 
