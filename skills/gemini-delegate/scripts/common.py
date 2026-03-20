@@ -19,6 +19,14 @@ DEFAULT_ALLOWED_MCP = os.environ.get(
 )
 
 
+def ensure_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
+
+
 def find_binary() -> str:
     binary = os.environ.get(DEFAULT_BINARY_ENV) or shutil.which("gemini")
     if not binary:
@@ -118,19 +126,20 @@ def run_command(
         }
     except subprocess.TimeoutExpired as exc:
         duration = round(time.monotonic() - started, 3)
-        stderr = (exc.stderr or "") + f"\nTimed out after {timeout_seconds} seconds.\n"
+        stderr = ensure_text(exc.stderr)
+        stderr += f"\nTimed out after {timeout_seconds} seconds.\n"
         return {
             "exit_code": 124,
-            "stdout": exc.stdout or "",
+            "stdout": ensure_text(exc.stdout),
             "stderr": stderr,
             "duration_seconds": duration,
             "timed_out": True,
         }
 
 
-def parse_json_output(stdout: str) -> dict[str, Any] | None:
+def parse_json_output(stdout: str | bytes) -> dict[str, Any] | None:
     try:
-        payload = json.loads(stdout)
+        payload = json.loads(ensure_text(stdout))
     except json.JSONDecodeError:
         return None
     return payload if isinstance(payload, dict) else None
@@ -178,12 +187,14 @@ def gemini_result_payload(
     dry_run: bool,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    parsed = parse_json_output(result.get("stdout", ""))
+    stdout = ensure_text(result.get("stdout", ""))
+    stderr = ensure_text(result.get("stderr", ""))
+    parsed = parse_json_output(stdout)
     response = ""
     if parsed and isinstance(parsed.get("response"), str):
         response = parsed["response"]
-    elif result.get("stdout"):
-        response = result["stdout"]
+    elif stdout:
+        response = stdout
     payload: dict[str, Any] = {
         "ok": result.get("exit_code", 1) == 0 and not result.get("timed_out", False),
         "mode": mode,
@@ -195,8 +206,8 @@ def gemini_result_payload(
         "exit_code": result.get("exit_code", 1),
         "duration_seconds": result.get("duration_seconds", 0),
         "timed_out": result.get("timed_out", False),
-        "stdout": result.get("stdout", ""),
-        "stderr": result.get("stderr", ""),
+        "stdout": stdout,
+        "stderr": stderr,
         "gemini_json": parsed,
         "response_text": response,
     }

@@ -59,21 +59,23 @@ I did not find evidence that normal Codex request traffic sends a separate stabl
 `bin/codex-smart.mjs` runs this sequence:
 
 1. Load saved accounts
-2. Probe live rate limits when possible via a temporary local `codex app-server`
-3. Rank accounts by plan tier first, then by remaining live headroom
+2. Probe live rate limits by default via a temporary local `codex app-server`
+3. Deprioritize any account whose live limits are fully exhausted, then rank the remaining accounts by plan tier and by a reset-aware quota budget so accounts with less quota left and a nearer reset get drained first
 4. Restore the saved account snapshot into the shared home
 5. Launch `codex` with the shared `CODEX_HOME`
+
+This keeps usable higher plan tiers ahead of lower ones, but it will switch away once an account has a live window at `0% free`. Within the same usable plan tier it now prefers the account whose remaining quota is most perishable, combining how much is left with how soon that window resets.
 
 You can preview the choice without launching Codex:
 
 ```bash
-bin/codex-account.mjs best --probe
-bin/codex-account.mjs switch-best --probe --dry-run
+bin/codex-account.mjs best
+bin/codex-account.mjs switch-best --dry-run
 bin/codex-account.mjs run work --dry-run
 bin/codex-smart.mjs --no-probe --dry-run
 ```
 
-The `list`, `best`, and `probe` views now show a cleaner per-account summary, including the saved live-limit snapshot and the weekly reset time when a probe is available.
+The `list`, `best`, and `probe` views show a cleaner per-account summary, including the live-limit snapshot and the weekly reset time when a probe is available. When you opt out with `--no-probe`, the output labels that state as a saved probe snapshot instead of calling it live.
 
 ## Notes
 
