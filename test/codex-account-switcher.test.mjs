@@ -20,6 +20,8 @@ import {
   normalizeCodexHome,
   getStorePaths,
   listSavedAccounts,
+  loadSavedAccount,
+  loadManifest,
   saveCurrentAccount,
   switchToSavedAccount,
   updateProbeResult,
@@ -444,6 +446,79 @@ test('saveCurrentAccount snapshots auth and global state and seeds a profile hom
   assert.deepEqual(profileAuth, auth);
   assert.deepEqual(profileGlobalState, globalState);
   assert.equal(await fs.readlink(linkedConfigPath), path.join(codexHome, 'config.toml'));
+});
+
+test('listSavedAccounts refreshes a saved snapshot after the same account re-authenticates', async () => {
+  const codexHome = await makeTempCodexHome();
+  await fs.writeFile(path.join(codexHome, 'config.toml'), 'model = "gpt-5.4"\n');
+
+  const originalAuth = buildChatGptAuth({
+    accountId: 'acct-personal',
+    planType: 'plus',
+    email: 'personal@example.com',
+    refreshToken: 'refresh-original',
+    sessionId: 'authsess_original',
+  });
+  await fs.writeFile(path.join(codexHome, 'auth.json'), JSON.stringify(originalAuth, null, 2));
+  await saveCurrentAccount(codexHome, 'personal');
+
+  const refreshedAuth = {
+    ...buildChatGptAuth({
+      accountId: 'acct-personal',
+      planType: 'plus',
+      email: 'personal@example.com',
+      refreshToken: 'refresh-rotated',
+      sessionId: 'authsess_rotated',
+    }),
+    last_refresh: '2026-03-25T20:01:24.712798Z',
+  };
+  await fs.writeFile(path.join(codexHome, 'auth.json'), JSON.stringify(refreshedAuth, null, 2));
+
+  const accounts = await listSavedAccounts(codexHome);
+
+  assert.equal(accounts.length, 1);
+  assert.equal(accounts[0].label, 'personal');
+  assert.equal(accounts[0].isCurrent, true);
+  assert.equal(accounts[0].fingerprint, fingerprintAuth(refreshedAuth));
+  assert.equal(accounts[0].summary.authSessionId, 'authsess_rotated');
+  assert.equal(accounts[0].summary.lastRefreshAt, '2026-03-25T20:01:24.712798Z');
+
+  const manifest = await loadManifest(codexHome);
+  assert.equal(manifest.snapshots.personal.fingerprint, fingerprintAuth(refreshedAuth));
+  assert.equal(manifest.snapshots.personal.summary.authSessionId, 'authsess_rotated');
+});
+
+test('loadSavedAccount returns the refreshed auth after the current account rotates tokens', async () => {
+  const codexHome = await makeTempCodexHome();
+  await fs.writeFile(path.join(codexHome, 'config.toml'), 'model = "gpt-5.4"\n');
+
+  const originalAuth = buildChatGptAuth({
+    accountId: 'acct-personal',
+    planType: 'plus',
+    email: 'personal@example.com',
+    refreshToken: 'refresh-original',
+    sessionId: 'authsess_original',
+  });
+  await fs.writeFile(path.join(codexHome, 'auth.json'), JSON.stringify(originalAuth, null, 2));
+  await saveCurrentAccount(codexHome, 'personal');
+
+  const refreshedAuth = {
+    ...buildChatGptAuth({
+      accountId: 'acct-personal',
+      planType: 'plus',
+      email: 'personal@example.com',
+      refreshToken: 'refresh-rotated',
+      sessionId: 'authsess_rotated',
+    }),
+    last_refresh: '2026-03-25T20:01:24.712798Z',
+  };
+  await fs.writeFile(path.join(codexHome, 'auth.json'), JSON.stringify(refreshedAuth, null, 2));
+
+  const saved = await loadSavedAccount(codexHome, 'personal');
+
+  assert.deepEqual(saved.auth, refreshedAuth);
+  assert.equal(saved.fingerprint, fingerprintAuth(refreshedAuth));
+  assert.equal(saved.summary.authSessionId, 'authsess_rotated');
 });
 
 test('switchToSavedAccount restores both auth.json and .codex-global-state.json', async () => {

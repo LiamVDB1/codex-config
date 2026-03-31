@@ -77,6 +77,8 @@ bin/codex-smart.mjs --no-probe --dry-run
 
 The `list`, `best`, and `probe` views show a cleaner per-account summary, including the live-limit snapshot and the weekly reset time when a probe is available. When you opt out with `--no-probe`, the output labels that state as a saved probe snapshot instead of calling it live.
 
+If you re-authenticate an already-saved ChatGPT account and the refresh token rotates, the switcher now reconciles that active auth back into the matching saved label automatically before listing, probing, or loading that account.
+
 ## Notes
 
 - Existing Codex sessions may need a restart after a manual `switch`, because the running process may already have loaded credentials.

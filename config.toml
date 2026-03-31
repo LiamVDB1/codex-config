@@ -12,32 +12,21 @@ url = "https://stitch.googleapis.com/mcp"
 [mcp_servers.stitch.env_http_headers]
 X-Goog-Api-Key = "STITCH_API_KEY"
 
-[mcp_servers.magic]
-command = "bash"
-args = [ "-lc", "npx -y @21st-dev/magic@latest API_KEY=\"$TWENTYFIRSTDEV_API_KEY\"" ]
-
 [mcp_servers.context7]
 command = "npx"
-args = [ "-y", "@upstash/context7-mcp@latest" ]
+args = ["-y", "@upstash/context7-mcp@latest"]
 
 [mcp_servers.memory]
 command = "npx"
-args = [ "-y", "@modelcontextprotocol/server-memory" ]
+args = ["-y", "@modelcontextprotocol/server-memory"]
 
 [mcp_servers.sequential-thinking]
 command = "npx"
-args = [ "-y", "@modelcontextprotocol/server-sequential-thinking" ]
+args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]
 
-[mcp_servers.mgrep]
-command = "mgrep"
-args = [ "mcp" ]
-
-# Pencil MCP server - macOS only
-# Uncomment the lines below on macOS systems where Pencil is installed
-# On Linux, leave this commented to avoid "No such file or directory" errors
-# [mcp_servers.pencil]
-# command = "/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64"
-# args = [ "--app", "desktop" ]
+[mcp_servers.pencil]
+command = "/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64"
+args = ["--app", "desktop"]
 
 [model_providers.litellm]
 name = "LiteLLM"
@@ -148,6 +137,15 @@ trust_level = "trusted"
 trust_level = "trusted"
 
 [projects."/Users/liamvdb/Workspace/Active/Work/truth_engine"]
+trust_level = "trusted"
+
+[projects."/Users/liamvdb"]
+trust_level = "trusted"
+
+[projects."/Users/liamvdb/Workspace/Active/School/compbio"]
+trust_level = "trusted"
+
+[projects."/Users/liamvdb/.claude"]
 trust_level = "trusted"
 
 [notice]
