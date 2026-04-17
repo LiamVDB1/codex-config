@@ -179,6 +179,26 @@ function getLimitHealthColor(account) {
   return 'red';
 }
 
+function findFiveHourResetWindow(rateLimits) {
+  const windows = [rateLimits?.primary, rateLimits?.secondary].filter(
+    (window) => window && typeof window.resetsAt === 'number',
+  );
+  if (!windows.length) {
+    return null;
+  }
+
+  const exactFiveHour = windows.find((window) => window.windowDurationMins === 300);
+  if (exactFiveHour) {
+    return exactFiveHour;
+  }
+
+  const shortWindow = windows
+    .filter((window) => typeof window.windowDurationMins === 'number' && window.windowDurationMins < 1_440)
+    .sort((left, right) => Math.abs(left.windowDurationMins - 300) - Math.abs(right.windowDurationMins - 300));
+
+  return shortWindow[0] ?? windows[0];
+}
+
 function findWeeklyResetWindow(rateLimits) {
   const windows = [rateLimits?.primary, rateLimits?.secondary].filter(
     (window) => window && typeof window.resetsAt === 'number',
@@ -199,14 +219,21 @@ function findWeeklyResetWindow(rateLimits) {
   return multiDay[0] ?? windows[0];
 }
 
-function formatWeeklyReset(rateLimits) {
-  const weeklyWindow = findWeeklyResetWindow(rateLimits);
-  if (!weeklyWindow) {
+function formatResetAt(window) {
+  if (!window) {
     return colorize('unavailable', 'gray');
   }
 
-  const resetAt = weeklyWindow.resetsAt > 1_000_000_000_000 ? weeklyWindow.resetsAt : weeklyWindow.resetsAt * 1000;
+  const resetAt = window.resetsAt > 1_000_000_000_000 ? window.resetsAt : window.resetsAt * 1000;
   return `${colorize(formatDateTime(resetAt), 'blue')} ${colorize(`(${formatRelativeTime(resetAt)})`, 'dim')}`;
+}
+
+function formatFiveHourReset(rateLimits) {
+  return formatResetAt(findFiveHourResetWindow(rateLimits));
+}
+
+function formatWeeklyReset(rateLimits) {
+  return formatResetAt(findWeeklyResetWindow(rateLimits));
 }
 
 function renderSavedAccount(account, { showProbeError = false } = {}) {
@@ -222,6 +249,7 @@ function renderSavedAccount(account, { showProbeError = false } = {}) {
     `${enriched.isCurrent ? colorize('*', 'green') : colorize('-', 'gray')} ${colorize(enriched.label, 'bold', 'cyan')} ${formatPlanBadge(plan)} ${formatStatusBadge(enriched)} ${formatProbeBadge(enriched)}`,
     `  ${colorize('Email', 'dim')}        ${email}`,
     `  ${colorize('Limits', 'dim')}       ${limits}`,
+    `  ${colorize('5h reset', 'dim')}     ${formatFiveHourReset(enriched.lastProbe?.rateLimits)}`,
     `  ${colorize('Weekly reset', 'dim')} ${formatWeeklyReset(enriched.lastProbe?.rateLimits)}`,
   ];
 

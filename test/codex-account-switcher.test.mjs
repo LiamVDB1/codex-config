@@ -324,7 +324,7 @@ test('codex-account run --dry-run accepts an explicit saved account label', asyn
   assert.equal(result.launchCodexHome, codexHome);
 });
 
-test('codex-account list shows weekly reset info in formatted output', async () => {
+test('codex-account list shows 5h and weekly reset info in formatted output', async () => {
   const codexHome = await makeTempCodexHome();
   await fs.writeFile(path.join(codexHome, 'config.toml'), 'model = "gpt-5.4"\n');
 
@@ -361,6 +361,7 @@ test('codex-account list shows weekly reset info in formatted output', async () 
   const output = stripAnsi(stdout);
   assert.match(output, /\* work \[TEAM\] \[current\] \[saved probe\]/);
   assert.match(output, /Limits\s+5h 88% free, 7d 70% free/);
+  assert.match(output, /5h reset\s+Mar 17, 2030/);
   assert.match(output, /Weekly reset\s+Mar 17, 2030/);
   assert.match(output, /Last probe\s+Mar 18, 2026/);
 });
