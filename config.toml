@@ -1,10 +1,12 @@
-model = "gpt-5.4"
-model_reasoning_effort = "xhigh"
+model = "gpt-5.5"
+model_reasoning_effort = "high"
 personality = "pragmatic"
 web_search = "live"
-model_catalog_json = "models_catalog.json"
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
+approvals_reviewer = "user"
+
+notify = ["/Users/liamvdb/.codex/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient", "turn-ended"]
 
 [mcp_servers.stitch]
 url = "https://stitch.googleapis.com/mcp"
@@ -27,6 +29,23 @@ args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]
 [mcp_servers.pencil]
 command = "/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64"
 args = ["--app", "desktop"]
+
+[mcp_servers.node_repl]
+args = []
+command = "/Applications/Codex.app/Contents/Resources/node_repl"
+startup_timeout_sec = 120
+
+[mcp_servers.node_repl.env]
+BROWSER_USE_AVAILABLE_BACKENDS = "iab"
+BROWSER_USE_MARKETPLACE_NAME = "openai-bundled"
+CODEX_CLI_PATH = "/Applications/Codex.app/Contents/Resources/codex"
+CODEX_HOME = "/Users/liamvdb/.codex"
+NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000"
+NODE_REPL_NODE_MODULE_DIRS = ""
+NODE_REPL_NODE_PATH = "/Applications/Codex.app/Contents/Resources/node"
+NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "167fdf579477181fba1773c1efb067b00c5a64fe85dafb50a2001bde198dc739"
+NODE_REPL_TRUSTED_CODE_PATHS = "/Users/liamvdb/.codex"
+NODE_REPL_UNTRUSTED_ENV_ALLOWLIST = "BROWSER_USE_MARKETPLACE_NAME"
 
 [model_providers.litellm]
 name = "LiteLLM"
@@ -151,6 +170,24 @@ trust_level = "trusted"
 [projects."/Users/liamvdb/.claude"]
 trust_level = "trusted"
 
+[projects."/Users/liamvdb/Workspace/Active/School/study-skills"]
+trust_level = "trusted"
+
+[projects."/Users/liamvdb/Workspace/Active/School/Selab2"]
+trust_level = "trusted"
+
+[projects."/Users/liamvdb/Workspace/Active/School/Elekto-Practicum"]
+trust_level = "trusted"
+
+[projects."/Users/liamvdb/Workspace/Active/Personal/LinkTesterStremio"]
+trust_level = "trusted"
+
+[projects."/Users/liamvdb/Documents/Codex/2026-05-23/can-you-make-my-internet-speed"]
+trust_level = "trusted"
+
+[projects."/Users/liamvdb/Documents/Codex/2026-05-27/goal-vind-een-betrouwbare-kooplink-voor"]
+trust_level = "trusted"
+
 [notice]
 "hide_gpt-5.1-codex-max_migration_prompt" = true
 
@@ -160,13 +197,53 @@ trust_level = "trusted"
 [features]
 apps = true
 multi_agent = true
-js_repl = true
+js_repl = false
 prevent_idle_sleep = true
 undo = true
 rmcp_client = true
+goals = true
 
 [tui]
 status_line = [ "model-with-reasoning", "context-remaining", "current-dir", "five-hour-limit", "weekly-limit" ]
 
+[tui.model_availability_nux]
+"gpt-5.5" = 4
+
 [sandbox_workspace_write]
 network_access = true
+
+[[skills.config]]
+path = "/Users/liamvdb/.codex/skills/api-design/SKILL.md"
+enabled = false
+
+[marketplaces.openai-bundled]
+last_updated = "2026-05-05T13:03:53Z"
+source_type = "local"
+source = "/Applications/Codex.app/Contents/Resources/plugins/openai-bundled"
+
+[marketplaces.openai-primary-runtime]
+last_updated = "2026-05-23T09:55:12Z"
+source_type = "local"
+source = "/Users/liamvdb/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime"
+
+[plugins."documents@openai-primary-runtime"]
+enabled = true
+
+[plugins."spreadsheets@openai-primary-runtime"]
+enabled = true
+
+[plugins."presentations@openai-primary-runtime"]
+enabled = true
+
+[plugins."browser-use@openai-bundled"]
+enabled = true
+
+[desktop]
+appearanceTheme = "system"
+followUpQueueMode = "steer"
+composerEnterBehavior = "cmdIfMultiline"
+preventSleepWhileRunning = true
+keepRemoteControlAwakeWhilePluggedIn = true
+
+[desktop.open-in-target-preferences]
+global = "pycharm"

@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 
 import { formatRateLimits, sortSavedAccounts } from '../lib/codex-account-switcher/rank.mjs';
 import { probeAuthRateLimits } from '../lib/codex-account-switcher/probe.mjs';
-import { chooseBestAccount, runCodexWithBestAccount } from '../lib/codex-account-switcher/runner.mjs';
+import { chooseBestAccount, enrichWithLiveProbe, runCodexWithBestAccount } from '../lib/codex-account-switcher/runner.mjs';
 import {
   getCurrentAccountContext,
   listSavedAccounts,
@@ -22,7 +22,9 @@ function printHelp() {
 Commands:
   current                 Show the currently active Codex account
   save [label]            Save the current auth.json as a switchable snapshot
-  list [--no-probe]       List saved accounts and refresh live rate limits by default
+  list [--no-probe] [--compact]
+                         List saved accounts and refresh live rate limits by default
+                         Use --compact for a one-line overview
   rename <old> <new>      Rename a saved account label
   switch <label>          Replace auth.json with a saved account snapshot
   probe [label|all]       Refresh live rate-limit data for one or all saved accounts
@@ -284,7 +286,7 @@ function parseCommandLine(argv) {
       continue;
     }
 
-    if (arg === '--json' || arg === '--probe' || arg === '--dry-run' || arg === '--no-probe') {
+    if (arg === '--json' || arg === '--probe' || arg === '--dry-run' || arg === '--no-probe' || arg === '--compact') {
       flags.add(arg);
       continue;
     }
@@ -337,9 +339,14 @@ function printCurrent(context, asJson) {
   }
 }
 
-function printAccounts(accounts, asJson) {
+function debugProbeEnabled() {
+  return process.env.CODEX_ACCOUNT_DEBUG_PROBE === '1';
+}
+
+function printAccounts(accounts, asJson, diagnostics = null) {
   if (asJson) {
-    console.log(JSON.stringify(accounts, null, 2));
+    const payload = diagnostics ? { accounts, diagnostics } : accounts;
+    console.log(JSON.stringify(payload, null, 2));
     return;
   }
 
@@ -349,6 +356,29 @@ function printAccounts(accounts, asJson) {
   }
 
   console.log(sortSavedAccounts(accounts).map((account) => renderSavedAccount(account)).join('\n\n'));
+}
+
+function formatCompactAccount(account) {
+  const email = account.summary?.email ?? 'api-key';
+  const name = email.includes('@') ? email.slice(0, email.indexOf('@')) : email;
+  const plan = String(account.summary?.planType ?? account.summary?.authType ?? '?').toUpperCase();
+  const primaryUsed = account.lastProbe?.rateLimits?.primary?.usedPercent;
+  const secondaryUsed = account.lastProbe?.rateLimits?.secondary?.usedPercent;
+  const primaryFree = typeof primaryUsed === 'number' ? `${Math.max(0, 100 - primaryUsed)}%` : '?';
+  const secondaryFree = typeof secondaryUsed === 'number' ? `${Math.max(0, 100 - secondaryUsed)}%` : '?';
+  const currentMarker = account.isCurrent ? '*' : '';
+
+  return `${currentMarker}${name} ${plan} ${primaryFree}/${secondaryFree}`;
+}
+
+function printCompactAccounts(accounts) {
+  const sorted = sortSavedAccounts(accounts);
+  if (!sorted.length) {
+    console.log('Codex accounts: none');
+    return;
+  }
+
+  console.log(`${sorted.map(formatCompactAccount).join(' | ')}`);
 }
 
 async function probeOne(codexHome, accountOrLabel) {
@@ -455,16 +485,26 @@ async function main(argv = process.argv.slice(2)) {
 
     if (command === 'list') {
       const accounts = await listSavedAccounts(codexHome);
+      const compact = parsed.flags.has('--compact');
       if (!probe) {
-        printAccounts(accounts, asJson);
+        if (compact && !asJson) {
+          printCompactAccounts(accounts);
+        } else {
+          printAccounts(accounts, asJson);
+        }
         return 0;
       }
 
-      const refreshed = [];
-      for (const account of accounts) {
-        refreshed.push(await probeOne(codexHome, account));
+      const refreshed = await enrichWithLiveProbe(codexHome, accounts, true, {
+        diagnostics: debugProbeEnabled(),
+      });
+      const refreshedAccounts = Array.isArray(refreshed) ? refreshed : refreshed.accounts;
+      const diagnostics = Array.isArray(refreshed) ? null : refreshed.diagnostics;
+      if (compact && !asJson) {
+        printCompactAccounts(refreshedAccounts);
+      } else {
+        printAccounts(refreshedAccounts, asJson, diagnostics);
       }
-      printAccounts(refreshed, asJson);
       return 0;
     }
 
@@ -512,10 +552,7 @@ async function main(argv = process.argv.slice(2)) {
         return 0;
       }
 
-      const results = [];
-      for (const account of await listSavedAccounts(codexHome)) {
-        results.push(await probeOne(codexHome, account.label));
-      }
+      const results = await enrichWithLiveProbe(codexHome, await listSavedAccounts(codexHome), true);
       printAccounts(results, asJson);
       return 0;
     }

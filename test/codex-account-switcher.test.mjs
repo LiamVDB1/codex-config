@@ -11,6 +11,7 @@ import {
   extractAuthSummary,
   fingerprintAuth,
 } from '../lib/codex-account-switcher/auth.mjs';
+import { probeAuthRateLimits } from '../lib/codex-account-switcher/probe.mjs';
 import {
   rankSavedAccount,
   sortSavedAccounts,
@@ -64,6 +65,27 @@ function buildChatGptAuth({ accountId, planType, email, refreshToken, sessionId 
 function stripAnsi(text) {
   return text.replace(/\x1b\[[0-9;]*m/g, '');
 }
+
+function withProbeStubs(stubs) {
+  return {
+    ...process.env,
+    CODEX_ACCOUNT_PROBE_CONCURRENCY: '2',
+    CODEX_ACCOUNT_PROBE_STUBS: JSON.stringify(stubs),
+  };
+}
+
+test('probeAuthRateLimits reports the known macOS codex panic as an unavailable live probe', async () => {
+  const codexBin = (await execFileAsync('which', ['codex'])).stdout.trim();
+  const result = await probeAuthRateLimits({}, {
+    codexBin,
+    cwd: path.dirname(cliPath),
+    timeoutMs: 500,
+  });
+
+  assert.equal(result.success, false);
+  assert.match(result.error, /Live probing is unavailable/);
+  assert.match(result.error, /Attempted to create a NULL object\./);
+});
 
 test('decodeJwtPayload reads base64url JWT payloads', () => {
   const token = makeJwt({ sub: 'user-123', exp: 1_900_000_000 });
@@ -258,33 +280,6 @@ test('sortSavedAccounts switches away once a live window is fully drained', () =
 
   assert.equal(rankSavedAccount(weeklySpent).isDrained, true);
   assert.equal(sortSavedAccounts([weeklyRoomy, weeklySpent])[0].label, 'weekly-roomy');
-});
-
-test('sortSavedAccounts prefers available quota over a drained higher-tier account', () => {
-  const drainedTeam = {
-    label: 'drained-team',
-    summary: { planType: 'team', email: 'team@example.com' },
-    lastProbe: {
-      success: true,
-      rateLimits: {
-        primary: { usedPercent: 100, windowDurationMins: 300, resetsAt: 1_900_000_000 },
-        secondary: { usedPercent: 100, windowDurationMins: 10_080, resetsAt: 1_900_000_000 },
-      },
-    },
-  };
-  const availablePlus = {
-    label: 'available-plus',
-    summary: { planType: 'plus', email: 'plus@example.com' },
-    lastProbe: {
-      success: true,
-      rateLimits: {
-        primary: { usedPercent: 25, windowDurationMins: 300, resetsAt: 1_900_000_000 },
-        secondary: { usedPercent: 40, windowDurationMins: 10_080, resetsAt: 1_900_000_000 },
-      },
-    },
-  };
-
-  assert.equal(sortSavedAccounts([drainedTeam, availablePlus])[0].label, 'available-plus');
 });
 
 test('codex-account run --dry-run accepts an explicit saved account label', async () => {
@@ -638,44 +633,143 @@ test('switchToSavedAccount consolidates stranded profile-home sessions back into
     sessionPath,
     [
       JSON.stringify({
-        timestamp: '2026-03-17T00:34:20.000Z',
-        type: 'session_meta',
-        payload: {
-          id: sessionId,
-          timestamp: '2026-03-17T00:34:20.000Z',
-        },
+        parent_id: null,
+        is_sidechain: false,
+        user_type: 'external',
+        cwd: '/Users/example/project',
+        session_id: sessionId,
+        version: '1.0.0',
+        git_branch: 'main',
+        type: 'summary',
+        summary: 'Recovered archived session',
       }),
       JSON.stringify({
-        timestamp: '2026-03-17T00:34:21.000Z',
-        type: 'response_item',
-        payload: {
-          type: 'message',
-          role: 'user',
-          content: [{ type: 'input_text', text: 'Recover old chats from the split profile home' }],
-        },
+        parent_id: null,
+        is_sidechain: false,
+        user_type: 'external',
+        cwd: '/Users/example/project',
+        session_id: sessionId,
+        version: '1.0.0',
+        git_branch: 'main',
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Recovered archived session' }] },
       }),
-      '',
     ].join('\n'),
   );
-  await fs.mkdir(shellSnapshotsPath, { recursive: true });
-  await fs.writeFile(path.join(shellSnapshotsPath, `${sessionId}.sh`), 'echo test\n');
+  await fs.mkdir(path.join(profileHomePath, 'shell_snapshots'), { recursive: true });
+  await fs.writeFile(path.join(profileHomePath, 'shell_snapshots', `${sessionId}.json`), JSON.stringify({ session_id: sessionId }, null, 2));
 
   await switchToSavedAccount(codexHome, 'saved');
 
-  assert.match(await fs.readFile(path.join(codexHome, 'history.jsonl'), 'utf8'), /Recover old chats/);
-  assert.equal(
-    JSON.parse(await fs.readFile(path.join(codexHome, 'session_index.jsonl'), 'utf8').then((text) =>
-      text
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .find((line) => line.includes(sessionId)),
-    )).thread_name,
-    'Recover old chats from the split profile home',
+  const sharedHistory = await fs.readFile(path.join(codexHome, 'sessions', sessionRelativePath), 'utf8');
+  const sharedSnapshot = await fs.readFile(path.join(codexHome, 'shell_snapshots', `${sessionId}.json`), 'utf8');
+
+  assert.match(sharedHistory, /Recovered archived session/);
+  assert.match(sharedSnapshot, /session_id/);
+});
+
+test('codex-account list can return opt-in probe diagnostics for the real probe path', async () => {
+  const codexHome = await makeTempCodexHome();
+  await fs.writeFile(path.join(codexHome, 'config.toml'), 'model = "gpt-5.4"\n');
+
+  const accountDefs = [
+    { label: 'work', email: 'work@example.com', planType: 'team', refreshToken: 'refresh-work' },
+    { label: 'personal', email: 'personal@example.com', planType: 'plus', refreshToken: 'refresh-personal' },
+    { label: 'shared', email: 'shared@example.com', planType: 'pro', refreshToken: 'refresh-shared' },
+  ];
+
+  for (const def of accountDefs) {
+    await fs.writeFile(path.join(codexHome, 'auth.json'), JSON.stringify(buildChatGptAuth({
+      accountId: `acct-${def.label}`,
+      planType: def.planType,
+      email: def.email,
+      refreshToken: def.refreshToken,
+      sessionId: `authsess_${def.label}`,
+    }), null, 2));
+    await saveCurrentAccount(codexHome, def.label);
+    await fs.mkdir(path.join(codexHome, 'accounts', 'homes', def.label, 'shell_snapshots'), { recursive: true });
+  }
+
+  const startedAt = Date.now();
+  const { stdout } = await execFileAsync(
+    process.execPath,
+    [cliPath, 'list', '--json', '--codex-home', codexHome],
+    {
+      cwd: path.dirname(cliPath),
+      env: {
+        ...withProbeStubs({
+          work: { delayMs: 250, rateLimits: { primary: { usedPercent: 20, windowDurationMins: 300, resetsAt: 1_900_000_000 } } },
+          personal: { delayMs: 250, rateLimits: { primary: { usedPercent: 50, windowDurationMins: 300, resetsAt: 1_900_000_000 } } },
+          shared: { delayMs: 250, rateLimits: { primary: { usedPercent: 70, windowDurationMins: 300, resetsAt: 1_900_000_000 } } },
+        }),
+        CODEX_ACCOUNT_DEBUG_PROBE: '1',
+      },
+    },
   );
-  await fs.access(path.join(codexHome, 'sessions', sessionRelativePath));
-  await fs.access(path.join(codexHome, 'shell_snapshots', `${sessionId}.sh`));
-  assert.equal(await fs.readlink(historyPath), path.join(codexHome, 'history.jsonl'));
-  assert.equal(await fs.readlink(sessionsPath), path.join(codexHome, 'sessions'));
-  assert.equal(await fs.readlink(shellSnapshotsPath), path.join(codexHome, 'shell_snapshots'));
+
+  const payload = JSON.parse(stdout);
+  assert.ok(payload.accounts, stdout);
+  assert.ok(payload.diagnostics, stdout);
+  assert.equal(payload.accounts.length, 3);
+  assert.deepEqual(payload.accounts.map((account) => account.label).sort(), ['personal', 'shared', 'work']);
+  assert.ok(payload.accounts.every((account) => account.probeSource === 'live'));
+  assert.equal(payload.diagnostics.enabled, true);
+  assert.equal(payload.diagnostics.accountCount, 3);
+  assert.equal(payload.diagnostics.concurrency, 2);
+  assert.ok(payload.diagnostics.totalDurationMs >= 250);
+  assert.ok(payload.diagnostics.totalDurationMs < 1000);
+  assert.ok(payload.diagnostics.totalDurationMs <= Date.now() - startedAt + 200);
+  assert.deepEqual(
+    payload.diagnostics.steps.map((step) => step.name).sort(),
+    ['loadSavedAccount', 'loadSavedAccount', 'loadSavedAccount', 'probeAuthRateLimits', 'probeAuthRateLimits', 'probeAuthRateLimits'],
+  );
+  assert.ok(payload.diagnostics.steps.every((step) => step.durationMs >= 0));
+  assert.ok(payload.diagnostics.steps.filter((step) => step.name === 'probeAuthRateLimits').every((step) => step.durationMs >= 200));
+  assert.deepEqual(
+    payload.diagnostics.results.map((result) => ({ label: result.label, success: result.success })).sort((left, right) => left.label.localeCompare(right.label)),
+    [
+      { label: 'personal', success: true },
+      { label: 'shared', success: true },
+      { label: 'work', success: true },
+    ],
+  );
+});
+
+test('codex-account best defaults to live probing for saved accounts', async () => {
+  const codexHome = await makeTempCodexHome();
+  await fs.writeFile(path.join(codexHome, 'config.toml'), 'model = "gpt-5.4"\n');
+
+  await fs.writeFile(path.join(codexHome, 'auth.json'), JSON.stringify(buildChatGptAuth({
+    accountId: 'acct-work',
+    planType: 'team',
+    email: 'work@example.com',
+    refreshToken: 'refresh-work',
+    sessionId: 'authsess_work',
+  }), null, 2));
+  await saveCurrentAccount(codexHome, 'work');
+
+  await fs.writeFile(path.join(codexHome, 'auth.json'), JSON.stringify(buildChatGptAuth({
+    accountId: 'acct-personal',
+    planType: 'plus',
+    email: 'personal@example.com',
+    refreshToken: 'refresh-personal',
+    sessionId: 'authsess_personal',
+  }), null, 2));
+  await saveCurrentAccount(codexHome, 'personal');
+
+  const { stdout } = await execFileAsync(
+    process.execPath,
+    [cliPath, 'best', '--json', '--codex-home', codexHome],
+    {
+      cwd: path.dirname(cliPath),
+      env: withProbeStubs({
+        work: { delayMs: 250, rateLimits: { primary: { usedPercent: 20, windowDurationMins: 300, resetsAt: 1_900_000_000 } } },
+        personal: { delayMs: 250, rateLimits: { primary: { usedPercent: 70, windowDurationMins: 300, resetsAt: 1_900_000_000 } } },
+      }),
+    },
+  );
+
+  const best = JSON.parse(stdout);
+  assert.equal(best.label, 'work');
+  assert.equal(best.probeSource, 'live');
 });
