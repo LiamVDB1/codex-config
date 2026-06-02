@@ -1,4 +1,5 @@
 model = "gpt-5.5"
+model_provider = "litellm"
 model_reasoning_effort = "high"
 personality = "pragmatic"
 web_search = "live"
@@ -186,6 +187,9 @@ trust_level = "trusted"
 trust_level = "trusted"
 
 [projects."/Users/liamvdb/Documents/Codex/2026-05-27/goal-vind-een-betrouwbare-kooplink-voor"]
+trust_level = "trusted"
+
+[projects."/Users/liamvdb/codex-claude-port"]
 trust_level = "trusted"
 
 [notice]
