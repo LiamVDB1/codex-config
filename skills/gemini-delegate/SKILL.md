@@ -9,7 +9,7 @@ description: Use when Codex should consult the local Gemini CLI for a second opi
 
 Use Gemini as an external model with explicit boundaries. Prefer one-shot read-only calls for advice and reviews; use tmux only when continuity matters, and use a separate git worktree for any write-capable Gemini session.
 
-On this machine, the wrappers default to a safe MCP allowlist that excludes local Gemini servers known to break API requests, notably `magic` and `mgrep`.
+On this machine, the wrappers default to a safe MCP allowlist that excludes local Gemini servers known to break API requests, notably `magic` and legacy search MCPs; use native `colgrep` for semantic search.
 
 ## Workflow
 

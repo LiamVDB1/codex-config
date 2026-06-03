@@ -1,0 +1,6 @@
+interface:
+  display_name: "Humanizer"
+  short_description: "Remove obvious AI-writing patterns"
+  default_prompt: "Use $humanizer to revise text so it sounds natural, specific, and human-written while preserving meaning."
+policy:
+  allow_implicit_invocation: true

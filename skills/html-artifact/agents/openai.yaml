@@ -1,0 +1,6 @@
+interface:
+  display_name: "HTML Artifact"
+  short_description: "Self-contained SecondBrain HTML artifacts"
+  default_prompt: "Use $html-artifact to create or update a self-contained HTML artifact in Liam's SecondBrain HTML library."
+policy:
+  allow_implicit_invocation: true

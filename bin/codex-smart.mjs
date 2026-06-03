@@ -2,6 +2,7 @@
 
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -30,6 +31,32 @@ for (const arg of rawArgs) {
 }
 
 const codexHome = process.env.CODEX_HOME ?? path.resolve(scriptDir, '..');
+const dotenvPath = path.join(codexHome, '.env');
+
+if (fs.existsSync(dotenvPath)) {
+  const dotenv = fs.readFileSync(dotenvPath, 'utf8');
+  for (const line of dotenv.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    const separator = trimmed.indexOf('=');
+    if (separator === -1) continue;
+
+    const key = trimmed.slice(0, separator).trim();
+    let value = trimmed.slice(separator + 1).trim();
+    if (!key || process.env[key]) continue;
+
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    process.env[key] = value;
+  }
+}
+
 const launchEnv = {
   ...process.env,
   CODEX_HOME: codexHome,

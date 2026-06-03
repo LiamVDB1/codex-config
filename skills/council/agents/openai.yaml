@@ -1,0 +1,6 @@
+interface:
+  display_name: "Council"
+  short_description: "On-demand high-stakes decision council"
+  default_prompt: "Use $council to run a role-based decision council and return a committed verdict with one concrete next step."
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Living Document"
+  short_description: "Continuously edited Core/Additions documents"
+  default_prompt: "Use $living-document to maintain a continuously edited document with stable Core and current-turn Additions."
+policy:
+  allow_implicit_invocation: true

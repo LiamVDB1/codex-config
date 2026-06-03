@@ -5,31 +5,50 @@ personality = "pragmatic"
 web_search = "live"
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
-approvals_reviewer = "user"
-
-notify = ["/Users/liamvdb/.codex/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient", "turn-ended"]
+approvals_reviewer = "auto_review"
+notify = [
+    "/Users/liamvdb/.codex/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient",
+    "turn-ended",
+]
 
 [mcp_servers.stitch]
 url = "https://stitch.googleapis.com/mcp"
+enabled = false
 
 [mcp_servers.stitch.env_http_headers]
 X-Goog-Api-Key = "STITCH_API_KEY"
 
 [mcp_servers.context7]
 command = "npx"
-args = ["-y", "@upstash/context7-mcp@latest"]
+args = [
+    "-y",
+    "@upstash/context7-mcp@latest",
+]
+
+[mcp_servers.context7.env]
+NPM_CONFIG_CACHE = "/Users/liamvdb/.claude/cache/npm"
 
 [mcp_servers.memory]
 command = "npx"
-args = ["-y", "@modelcontextprotocol/server-memory"]
+args = [
+    "-y",
+    "@modelcontextprotocol/server-memory",
+]
 
 [mcp_servers.sequential-thinking]
 command = "npx"
-args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+args = [
+    "-y",
+    "@modelcontextprotocol/server-sequential-thinking",
+]
 
 [mcp_servers.pencil]
 command = "/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64"
-args = ["--app", "desktop"]
+args = [
+    "--app",
+    "desktop",
+]
+enabled = false
 
 [mcp_servers.node_repl]
 args = []
@@ -37,16 +56,16 @@ command = "/Applications/Codex.app/Contents/Resources/node_repl"
 startup_timeout_sec = 120
 
 [mcp_servers.node_repl.env]
-BROWSER_USE_AVAILABLE_BACKENDS = "iab"
-BROWSER_USE_MARKETPLACE_NAME = "openai-bundled"
-CODEX_CLI_PATH = "/Applications/Codex.app/Contents/Resources/codex"
-CODEX_HOME = "/Users/liamvdb/.codex"
 NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000"
 NODE_REPL_NODE_MODULE_DIRS = ""
 NODE_REPL_NODE_PATH = "/Applications/Codex.app/Contents/Resources/node"
-NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "167fdf579477181fba1773c1efb067b00c5a64fe85dafb50a2001bde198dc739"
 NODE_REPL_TRUSTED_CODE_PATHS = "/Users/liamvdb/.codex"
-NODE_REPL_UNTRUSTED_ENV_ALLOWLIST = "BROWSER_USE_MARKETPLACE_NAME"
+CODEX_HOME = "/Users/liamvdb/.codex"
+NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "4b6bfaf4ed2ce9b5cd68e60a61642eb4927a36306ba8c8993f6058607b3530fb"
+BROWSER_USE_AVAILABLE_BACKENDS = "iab"
+NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER = "Control the in-app browser in conjunction with the Browser Plugin."
+BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod"
+CODEX_CLI_PATH = "/Applications/Codex.app/Contents/Resources/codex"
 
 [model_providers.litellm]
 name = "LiteLLM"
@@ -84,67 +103,80 @@ job_max_runtime_seconds = 1800
 
 [agents.explorer]
 description = "Read-only codebase mapper for specific codebase questions, patterns, and file-level guidance."
-nickname_candidates = [ "Scout", "Mapper" ]
+nickname_candidates = [
+    "Scout",
+    "Mapper",
+]
 config_file = "agents/explorer.toml"
 
 [agents.worker]
 description = "Implementation-focused agent for bounded code changes with clear file ownership."
-nickname_candidates = [ "Builder", "Implementer" ]
+nickname_candidates = [
+    "Builder",
+    "Implementer",
+]
 config_file = "agents/worker.toml"
 
 [agents.planner]
 description = "Turns ambiguous work into an incremental implementation plan with dependencies and risks."
-nickname_candidates = [ "Planner", "Strategist" ]
+nickname_candidates = [
+    "Planner",
+    "Strategist",
+]
 config_file = "agents/planner.toml"
 
 [agents.reviewer]
 description = "Read-only code reviewer focused on correctness, regressions, security, and missing tests."
-nickname_candidates = [ "Reviewer", "Inspector" ]
+nickname_candidates = [
+    "Reviewer",
+    "Inspector",
+]
 config_file = "agents/reviewer.toml"
 
 [agents.security_reviewer]
 description = "Read-only security reviewer for trust boundaries, auth, secrets, input handling, and abuse cases."
-nickname_candidates = [ "Security", "Sentinel" ]
+nickname_candidates = [
+    "Security",
+    "Sentinel",
+]
 config_file = "agents/security_reviewer.toml"
 
 [agents.build_fixer]
 description = "Minimal-diff fixer for build, typecheck, test, and configuration breakages."
-nickname_candidates = [ "Fixer", "Compiler" ]
+nickname_candidates = [
+    "Fixer",
+    "Compiler",
+]
 config_file = "agents/build_fixer.toml"
-
-[agents.playwright_debugger]
-description = "Playwright-focused UI debugger for reproducing browser issues, updating tests, and collecting artifacts."
-nickname_candidates = [ "Playwright", "Browser" ]
-config_file = "agents/playwright_debugger.toml"
 
 [agents.kimi_worker]
 description = "Implementation-focused worker using Kimi K2.5 through LiteLLM."
-nickname_candidates = [ "Kimi Worker" ]
+nickname_candidates = ["Kimi Worker"]
 config_file = "agents/kimi_worker.toml"
 
 [agents.glm_worker]
 description = "Implementation-focused worker using GLM-5 through LiteLLM."
-nickname_candidates = [ "GLM Worker" ]
+nickname_candidates = ["GLM Worker"]
 config_file = "agents/glm_worker.toml"
 
 [agents.kimi_consult]
 description = "Read-only diverse-opinion consultant using Kimi K2.5 through LiteLLM."
-nickname_candidates = [ "Kimi Consult" ]
+nickname_candidates = ["Kimi Consult"]
 config_file = "agents/kimi_consult.toml"
 
 [agents.glm_consult]
 description = "Read-only diverse-opinion consultant using GLM-5 through LiteLLM."
-nickname_candidates = [ "GLM Consult" ]
+nickname_candidates = ["GLM Consult"]
 config_file = "agents/glm_consult.toml"
 
 [agents.minimax_m2_worker]
 description = "Implementation-focused worker using MiniMax M2 through LiteLLM."
-nickname_candidates = [ "MiniMax M2 Worker" ]
+nickname_candidates = ["MiniMax M2 Worker"]
 config_file = "agents/minimax_m2_worker.toml"
 
 [agents.minimax_m2_consult]
 description = "Read-only diverse-opinion consultant using MiniMax M2 through LiteLLM."
-nickname_candidates = [ "MiniMax M2 Consult" ]
+nickname_candidates = ["MiniMax M2 Consult"]
 config_file = "agents/minimax_m2_consult.toml"
 
 [projects."/"]
@@ -192,6 +224,12 @@ trust_level = "trusted"
 [projects."/Users/liamvdb/codex-claude-port"]
 trust_level = "trusted"
 
+[projects."/Users/liamvdb/Documents/Codex/2026-06-03/i-d-like-to-be-able"]
+trust_level = "trusted"
+
+[projects."/Users/liamvdb/Documents/Codex/2026-06-03/can-you-take-a-look-at"]
+trust_level = "trusted"
+
 [notice]
 "hide_gpt-5.1-codex-max_migration_prompt" = true
 
@@ -201,14 +239,20 @@ trust_level = "trusted"
 [features]
 apps = true
 multi_agent = true
-js_repl = false
 prevent_idle_sleep = true
 undo = true
 rmcp_client = true
 goals = true
+js_repl = false
 
 [tui]
-status_line = [ "model-with-reasoning", "context-remaining", "current-dir", "five-hour-limit", "weekly-limit" ]
+status_line = [
+    "model-with-reasoning",
+    "context-remaining",
+    "current-dir",
+    "five-hour-limit",
+    "weekly-limit",
+]
 
 [tui.model_availability_nux]
 "gpt-5.5" = 4
@@ -216,19 +260,21 @@ status_line = [ "model-with-reasoning", "context-remaining", "current-dir", "fiv
 [sandbox_workspace_write]
 network_access = true
 
-[[skills.config]]
-path = "/Users/liamvdb/.codex/skills/api-design/SKILL.md"
-enabled = false
-
 [marketplaces.openai-bundled]
 last_updated = "2026-05-05T13:03:53Z"
 source_type = "local"
 source = "/Applications/Codex.app/Contents/Resources/plugins/openai-bundled"
 
 [marketplaces.openai-primary-runtime]
-last_updated = "2026-05-23T09:55:12Z"
+last_updated = "2026-06-03T09:55:17Z"
 source_type = "local"
 source = "/Users/liamvdb/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime"
+
+[marketplaces.claude-plugins-official]
+last_updated = "2026-06-03T13:40:50Z"
+last_revision = "4f1679899631b2752c468714c0c365bb9b84269b"
+source_type = "git"
+source = "https://github.com/anthropics/claude-plugins-official.git"
 
 [plugins."documents@openai-primary-runtime"]
 enabled = true
@@ -242,12 +288,65 @@ enabled = true
 [plugins."browser-use@openai-bundled"]
 enabled = true
 
+[plugins."remotion@openai-curated"]
+enabled = true
+
+[plugins."hyperframes@openai-curated"]
+enabled = true
+
+[plugins."claude-code-setup@claude-plugins-official"]
+enabled = true
+
+[plugins."frontend-design@claude-plugins-official"]
+enabled = true
+
+[plugins."github@claude-plugins-official"]
+enabled = true
+
 [desktop]
 appearanceTheme = "system"
 followUpQueueMode = "steer"
 composerEnterBehavior = "cmdIfMultiline"
 preventSleepWhileRunning = true
 keepRemoteControlAwakeWhilePluggedIn = true
+show-context-window-usage = true
+conversationDetailMode = "STEPS_COMMANDS"
+reviewDelivery = "inline"
 
 [desktop.open-in-target-preferences]
-global = "pycharm"
+global = "vscode"
+
+[shell_environment_policy]
+inherit = "core"
+
+[shell_environment_policy.set]
+ANTHROPIC_CUSTOM_MODEL_OPTION = "gpt-5.5"
+ANTHROPIC_CUSTOM_MODEL_OPTION_NAME = "GPT-5.5"
+ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION = "Routed through local hybrid router"
+CLAUDE_CODE_SUBAGENT_MODEL = "gpt-5.4-mini"
+CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1"
+ECC_HOOK_PROFILE = "standard"
+ANTHROPIC_DEFAULT_SONNET_MODEL = "litellm/deepseek-pro"
+ANTHROPIC_DEFAULT_HAIKU_MODEL = "litellm/gpt-5.4-mini"
+CLAUDE_AUTOCOMPACT_PCT_OVERRIDE = "85"
+CLAUDE_CODE_AUTO_COMPACT_WINDOW = "200000"
+
+[hooks.state]
+
+[hooks.state."/Users/liamvdb/.codex/hooks.json:pre_tool_use:1:0"]
+trusted_hash = "sha256:a014b4c71aed8cf2453e30fe89b308ac82ac942168829a3b9700027c580dbc36"
+
+[hooks.state."/Users/liamvdb/.codex/hooks.json:pre_tool_use:0:0"]
+trusted_hash = "sha256:24de052bfd8532750314de0b24a988a104cd078b70d1f4f6bbb4d3ce2bc02943"
+
+[hooks.state."/Users/liamvdb/Workspace/Active/Work/truth_engine/.codex/hooks.json:stop:0:0"]
+trusted_hash = "sha256:ee6fb57f4fc8deda7f0f15729ad51b5326722517beb4385fa4130467f46202f1"
+enabled = false
+
+[hooks.state."/Users/liamvdb/Workspace/Active/Work/truth_engine/.codex/hooks.json:stop:0:1"]
+trusted_hash = "sha256:5f6ea92c73b13a96e47e0694edba706dd94c3220aa3fbd04eeb136451be3562f"
+enabled = false
+
+[hooks.state."/Users/liamvdb/.codex/hooks.json:pre_compact:0:0"]
+trusted_hash = "sha256:d386e6b90088c10fac82089589b0ca4d701c77d4c40a246111f1a953e53f703e"
+enabled = false
