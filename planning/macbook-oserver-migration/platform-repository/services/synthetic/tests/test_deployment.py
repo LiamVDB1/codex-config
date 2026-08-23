@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import sys
 import tempfile
 import unittest
@@ -38,12 +39,53 @@ def valid_approval() -> dict:
     }
 
 
+def write_approval(directory: Path, approval: dict | None = None) -> Path:
+    candidate = json.loads(json.dumps(approval or valid_approval()))
+    index = {
+        "schema_version": "homeserver-synthetic-artifacts/v1",
+        "service_id": candidate["service_id"],
+        "source_commit_sha": candidate["source_commit_sha"],
+        "previous_approved_sha": candidate["previous_approved_sha"],
+        "platform_digests": candidate["platform_digests"],
+        "rollback_platform_digests": candidate["rollback_platform_digests"],
+    }
+    index_bytes = (json.dumps(index, indent=2, sort_keys=True) + "\n").encode()
+    (directory / "artifact-index.json").write_bytes(index_bytes)
+    candidate["artifact_index_digest"] = "sha256:" + hashlib.sha256(index_bytes).hexdigest()
+    path = directory / "approval.json"
+    path.write_text(json.dumps(candidate))
+    return path
+
+
 class ApprovalTests(unittest.TestCase):
     def test_valid_approval_loads(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "approval.json"
-            path.write_text(json.dumps(valid_approval()))
+            path = write_approval(Path(temp_dir))
             self.assertEqual(load_approval(path)["source_commit_sha"], SHA_V2)
+
+    def test_tampered_artifact_index_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            path = write_approval(directory)
+            index = json.loads((directory / "artifact-index.json").read_text())
+            index["platform_digests"]["linux/amd64"] = "sha256:" + "f" * 64
+            (directory / "artifact-index.json").write_text(json.dumps(index))
+            with self.assertRaisesRegex(DeploymentError, "artifact index digest"):
+                load_approval(path)
+
+    def test_rebound_artifact_index_metadata_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            path = write_approval(directory)
+            index = json.loads((directory / "artifact-index.json").read_text())
+            index["service_id"] = "SVC-OTHER"
+            index_bytes = (json.dumps(index, indent=2, sort_keys=True) + "\n").encode()
+            (directory / "artifact-index.json").write_bytes(index_bytes)
+            approval = json.loads(path.read_text())
+            approval["artifact_index_digest"] = "sha256:" + hashlib.sha256(index_bytes).hexdigest()
+            path.write_text(json.dumps(approval))
+            with self.assertRaisesRegex(DeploymentError, "metadata"):
+                load_approval(path)
 
     def test_missing_metadata_fails_closed(self) -> None:
         for field in (

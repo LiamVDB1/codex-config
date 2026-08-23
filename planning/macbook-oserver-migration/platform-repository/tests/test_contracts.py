@@ -18,6 +18,7 @@ from platform_contracts import (  # noqa: E402
     validate_rollback_receipt,
     validate_service,
 )
+from validate_repository import validate_repository  # noqa: E402
 
 
 SHA_A = "a" * 40
@@ -177,6 +178,28 @@ class BootstrapPlanTests(unittest.TestCase):
     def test_invalid_commit_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "40-character"):
             build_plan("homeserver", "main", target="/srv/homeserver/repo")
+
+
+class RepositoryValidationTests(unittest.TestCase):
+    def test_empty_catalogue_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "platform/catalogue/services").mkdir(parents=True)
+            (root / "repository.json").write_text(json.dumps({
+                "schema_version": "homeserver-platform-repository/v1",
+                "canonical_remote": "https://github.com/LiamVDB1/codex-config.git",
+                "canonical_branch": "main",
+                "source_subdir": "planning/macbook-oserver-migration/platform-repository",
+                "hosts": {
+                    "homeserver": {"architecture": "linux/amd64", "durable_clone": "/srv/homeserver/repo"},
+                    "oserver": {"architecture": "linux/arm64", "durable_clone": "/home/opc/server-platform"},
+                },
+            }))
+            errors = validate_repository(root)
+        self.assertIn("catalogue must contain at least one service record", errors)
+
+    def test_canonical_repository_has_a_valid_service(self) -> None:
+        self.assertEqual(validate_repository(ROOT), [])
 
 
 if __name__ == "__main__":

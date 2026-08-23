@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -23,6 +24,7 @@ APPROVAL_FIELDS = {
     "platform_digests",
     "rollback_platform_digests",
 }
+ARTIFACT_INDEX_FIELDS = APPROVAL_FIELDS - {"artifact_index_digest"}
 
 
 class DeploymentError(ValueError):
@@ -67,6 +69,21 @@ def load_approval(path: Path) -> dict[str, Any]:
             raise DeploymentError(f"{field} must contain linux/amd64 and linux/arm64")
         for architecture, digest in digests.items():
             _require_digest(digest, f"{field}.{architecture}")
+    index_path = path.with_name("artifact-index.json")
+    try:
+        index_bytes = index_path.read_bytes()
+        index = json.loads(index_bytes)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise DeploymentError(f"artifact index cannot be loaded: {exc}") from exc
+    actual_index_digest = "sha256:" + hashlib.sha256(index_bytes).hexdigest()
+    if approval["artifact_index_digest"] != actual_index_digest:
+        raise DeploymentError("artifact index digest does not match approval")
+    if not isinstance(index, dict) or set(index) != ARTIFACT_INDEX_FIELDS:
+        raise DeploymentError("artifact index fields are invalid")
+    expected_index = {key: approval[key] for key in ARTIFACT_INDEX_FIELDS}
+    expected_index["schema_version"] = "homeserver-synthetic-artifacts/v1"
+    if index != expected_index:
+        raise DeploymentError("artifact index metadata does not match approval")
     return approval
 
 
