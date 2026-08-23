@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://juphorizon.com/schemas/homeserver-service-v1.json",
+  "title": "Homeserver service catalogue entry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "service_id", "classification", "owners", "source", "artifacts",
+    "deployment", "network", "storage", "health", "resources", "backup", "rollback", "secret_refs"
+  ],
+  "properties": {
+    "schema_version": {"const": "homeserver-service/v1"},
+    "service_id": {"type": "string", "pattern": "^SVC-[A-Z0-9_-]+$"},
+    "classification": {"enum": ["production", "private", "media", "rollback", "preview"]},
+    "owners": {"type": "object", "additionalProperties": false, "required": ["platform", "operational"]},
+    "source": {"type": "object", "additionalProperties": false, "required": ["repository", "commit_sha", "path", "dirty"]},
+    "artifacts": {"type": "object", "additionalProperties": false, "required": ["manifest_digest", "platform_digests"]},
+    "deployment": {"type": "object", "additionalProperties": false, "required": ["hosts", "compose_path", "project_name", "rollback_artifact_digests"]},
+    "network": {"type": "object", "additionalProperties": false, "required": ["bindings", "public_route"]},
+    "storage": {"type": "object", "additionalProperties": false, "required": ["stateful", "paths"]},
+    "health": {"type": "object", "additionalProperties": false, "required": ["liveness", "readiness", "user_flow", "timeout_seconds"]},
+    "resources": {"type": "object", "additionalProperties": false, "required": ["cpu", "memory_mb", "pids"]},
+    "backup": {"type": "object", "additionalProperties": false, "required": ["required", "owner", "rpo_minutes", "rto_minutes", "destinations", "restore_test_required"]},
+    "rollback": {"type": "object", "additionalProperties": false, "required": ["strategy", "previous_approved_sha", "max_downtime_minutes", "steps"]},
+    "secret_refs": {"type": "array", "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"}}
+  }
+}

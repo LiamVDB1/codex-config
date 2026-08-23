@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Homeserver deployment receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "service_id", "action", "approved_commit_sha", "source_clean", "host",
+    "architecture", "manifest_digest", "image_digest", "catalogue_sha256", "started_at",
+    "completed_at", "health", "actor"
+  ]
+}

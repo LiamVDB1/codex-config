@@ -1,0 +1,16 @@
+{
+  "schema_version": "homeserver-platform-repository/v1",
+  "canonical_remote": "https://github.com/LiamVDB1/codex-config.git",
+  "canonical_branch": "main",
+  "source_subdir": "planning/macbook-oserver-migration/platform-repository",
+  "hosts": {
+    "homeserver": {
+      "architecture": "linux/amd64",
+      "durable_clone": "/srv/homeserver/repo"
+    },
+    "oserver": {
+      "architecture": "linux/arm64",
+      "durable_clone": "/home/opc/server-platform"
+    }
+  }
+}
