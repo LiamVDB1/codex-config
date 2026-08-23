@@ -1,0 +1,14 @@
+{
+  "schema_version": "homeserver-synthetic-artifacts/v1",
+  "service_id": "SVC-SYNTHETIC",
+  "source_commit_sha": "2ba0f756c53f0d5d4e0754e6e971c3c6ef53fc7b",
+  "previous_approved_sha": "b329595d7994065b45e1a9403d6425b14722877c",
+  "platform_digests": {
+    "linux/amd64": "sha256:83798683c1c4af2023438e53dd29cb5acf809dc8d4f3c3fe8d9c89cda73c4618",
+    "linux/arm64": "sha256:30f3d64e116a1aa2cc21e2b8f54f29d98911dac9aa5f99615cc28cd4e3a7e5b3"
+  },
+  "rollback_platform_digests": {
+    "linux/amd64": "sha256:818ba211553286f6c7f809fda8000ef7645a1718b20cff53b809b76c87446299",
+    "linux/arm64": "sha256:92624aca4aa9757a649d184bbb025a5c816cb70bf44d619df33a5d9eb3ec4fb7"
+  }
+}

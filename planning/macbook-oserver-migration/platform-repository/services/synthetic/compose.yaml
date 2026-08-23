@@ -1,0 +1,17 @@
+services:
+  synthetic:
+    image: "${SYNTHETIC_IMAGE_DIGEST:?SYNTHETIC_IMAGE_DIGEST must be set}"
+    container_name: homeserver-synthetic
+    ports:
+      - "127.0.0.1:18180:8080"
+    read_only: true
+    tmpfs:
+      - "/tmp:rw,noexec,nosuid,size=16m"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: 0.25
+    pids_limit: 64
+    restart: "no"

@@ -1,0 +1,68 @@
+{
+  "schema_version": "homeserver-service/v1",
+  "service_id": "SVC-SYNTHETIC",
+  "classification": "private",
+  "owners": {
+    "platform": "homeserver-platform",
+    "operational": "liamvdb"
+  },
+  "source": {
+    "repository": "https://github.com/LiamVDB1/codex-config.git",
+    "commit_sha": "2ba0f756c53f0d5d4e0754e6e971c3c6ef53fc7b",
+    "path": "planning/macbook-oserver-migration/platform-repository/services/synthetic",
+    "dirty": false
+  },
+  "artifacts": {
+    "manifest_digest": "sha256:413c732a524c2f7ba6e5f807758d31a27c22a69a0315d6727715ebfdca321c16",
+    "platform_digests": {
+      "linux/amd64": "sha256:83798683c1c4af2023438e53dd29cb5acf809dc8d4f3c3fe8d9c89cda73c4618",
+      "linux/arm64": "sha256:30f3d64e116a1aa2cc21e2b8f54f29d98911dac9aa5f99615cc28cd4e3a7e5b3"
+    }
+  },
+  "deployment": {
+    "hosts": ["homeserver", "oserver"],
+    "compose_path": "services/synthetic/compose.yaml",
+    "project_name": "homeserver-synthetic",
+    "rollback_artifact_digests": [
+      "sha256:818ba211553286f6c7f809fda8000ef7645a1718b20cff53b809b76c87446299",
+      "sha256:92624aca4aa9757a649d184bbb025a5c816cb70bf44d619df33a5d9eb3ec4fb7"
+    ]
+  },
+  "network": {
+    "bindings": [
+      {"host": "homeserver", "address": "127.0.0.1", "port": 18180, "protocol": "tcp"},
+      {"host": "oserver", "address": "127.0.0.1", "port": 18180, "protocol": "tcp"}
+    ],
+    "public_route": false
+  },
+  "storage": {
+    "stateful": false,
+    "paths": []
+  },
+  "health": {
+    "liveness": "/healthz",
+    "readiness": "/readyz",
+    "user_flow": "/synthetic",
+    "timeout_seconds": 5
+  },
+  "resources": {
+    "cpu": "0.25",
+    "memory_mb": 128,
+    "pids": 64
+  },
+  "backup": {
+    "required": false,
+    "owner": "homeserver-platform",
+    "rpo_minutes": 0,
+    "rto_minutes": 15,
+    "destinations": [],
+    "restore_test_required": false
+  },
+  "rollback": {
+    "strategy": "stop-and-redeploy-previous-immutable-image",
+    "previous_approved_sha": "b329595d7994065b45e1a9403d6425b14722877c",
+    "max_downtime_minutes": 10,
+    "steps": ["stop v2 container", "run approved v1 image by immutable ID", "verify v1 health and synthetic endpoint", "remove container"]
+  },
+  "secret_refs": []
+}
