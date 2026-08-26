@@ -118,12 +118,12 @@ def require_provenance(
     """
     if verify_clone is None:
         raise DeploymentError("live clone verification is mandatory")
-        derived = _rederive_from_clone(verify_clone)
-        for field in ("head", "clean", "subdir_tree", "remote_url", "contained_branches"):
-            if provenance.get(field) != derived.get(field):
-                raise DeploymentError(
-                    f"provenance receipt field {field!r} does not match the live clone"
-                )
+    derived = _rederive_from_clone(verify_clone)
+    for field in ("head", "clean", "subdir_tree", "remote_url", "contained_branches"):
+        if provenance.get(field) != derived.get(field):
+            raise DeploymentError(
+                f"provenance receipt field {field!r} does not match the live clone"
+            )
     if not isinstance(provenance, dict) or provenance.get("schema_version") != PROVENANCE_SCHEMA:
         raise DeploymentError("provenance receipt schema is unsupported")
     if provenance.get("clean") is not True:

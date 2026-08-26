@@ -157,12 +157,22 @@ class ProvenanceGateTests(unittest.TestCase):
     def setUp(self) -> None:
         self.clone = _clone_fixture()
 
+    def _receipt(self):
+        from git_provenance import collect_git_provenance
+
+        return collect_git_provenance(
+            self.clone,
+            expected_remote="https://github.com/LiamVDB1/codex-config.git",
+            allowed_branches=["main"],
+            source_subdir="planning/macbook-oserver-migration/platform-repository",
+        )
+
     def _plan(self, **overrides):
         args = dict(
-            approval=valid_approval(),
+            approval={"source_commit_sha": self._receipt()["head"]},
             host="homeserver",
             architecture="linux/amd64",
-            provenance=valid_provenance(),
+            provenance=self._receipt(),
             image_digest=AMD64_DIGEST,
             action="deploy",
             verify_clone=self.clone,
@@ -171,32 +181,90 @@ class ProvenanceGateTests(unittest.TestCase):
         return build_runtime_plan(**args)
 
     def test_dirty_measured_provenance_fails(self) -> None:
-        provenance = valid_provenance()
-        provenance["clean"] = False
-        with self.assertRaisesRegex(DeploymentError, "not clean"):
-            self._plan(provenance=provenance)
+        receipt = self._receipt()
+        receipt["clean"] = False
+        # The live-clone rederivation rejects the mismatch before the clean flag
+        # is even consulted; either message is a fail-closed outcome.
+        with self.assertRaisesRegex(DeploymentError, "live clone"):
+            self._plan(approval={"source_commit_sha": receipt["head"]}, provenance=receipt)
 
     def test_wrong_head_fails(self) -> None:
+        receipt = self._receipt()
+        approval = {"source_commit_sha": SHA_V1}
         with self.assertRaisesRegex(DeploymentError, "does not match approved commit"):
-            self._plan(provenance=valid_provenance(head=SHA_V1))
+            build_runtime_plan(
+                approval,
+                host="homeserver",
+                architecture="linux/amd64",
+                provenance=receipt,
+                image_digest=AMD64_DIGEST,
+                action="deploy",
+                verify_clone=self.clone,
+            )
+
+    def test_forged_subtree_rejected_by_live_clone(self) -> None:
+        from git_provenance import collect_git_provenance
+
+        real = collect_git_provenance(
+            self.clone,
+            expected_remote="https://github.com/LiamVDB1/codex-config.git",
+            allowed_branches=["main"],
+            source_subdir="planning/macbook-oserver-migration/platform-repository",
+        )
+        approval = {"source_commit_sha": real["head"]}
+        forged = dict(real)
+        forged["subdir_tree"] = "0" * 40
+        with self.assertRaisesRegex(DeploymentError, "does not match the live clone"):
+            build_runtime_plan(
+                approval,
+                host="homeserver",
+                architecture="linux/amd64",
+                provenance=forged,
+                image_digest=AMD64_DIGEST,
+                action="deploy",
+                verify_clone=self.clone,
+            )
 
     def test_unsupported_provenance_schema_fails(self) -> None:
-        provenance = valid_provenance()
-        provenance["schema_version"] = "asserted/v1"
+        receipt = self._receipt()
+        receipt["schema_version"] = "asserted/v1"
         with self.assertRaisesRegex(DeploymentError, "schema"):
-            self._plan(provenance=provenance)
+            self._plan(approval={"source_commit_sha": receipt["head"]}, provenance=receipt)
 
 
 class RuntimePlanTests(unittest.TestCase):
     def setUp(self) -> None:
         self.clone = _clone_fixture()
+        from git_provenance import collect_git_provenance
+
+        self.receipt = collect_git_provenance(
+            self.clone,
+            expected_remote="https://github.com/LiamVDB1/codex-config.git",
+            allowed_branches=["main"],
+            source_subdir="planning/macbook-oserver-migration/platform-repository",
+        )
+        self.approval = {
+            "schema_version": "homeserver-synthetic-approval/v1",
+            "service_id": "SVC-SYNTHETIC",
+            "source_commit_sha": self.receipt["head"],
+            "previous_approved_sha": SHA_V1,
+            "artifact_index_digest": INDEX_DIGEST,
+            "platform_digests": {
+                "linux/amd64": AMD64_DIGEST,
+                "linux/arm64": ARM64_DIGEST,
+            },
+            "rollback_platform_digests": {
+                "linux/amd64": "sha256:" + "d" * 64,
+                "linux/arm64": "sha256:" + "e" * 64,
+            },
+        }
 
     def test_approved_plan_is_loopback_only_and_hardened(self) -> None:
         plan = build_runtime_plan(
-            valid_approval(),
+            self.approval,
             host="homeserver",
             architecture="linux/amd64",
-            provenance=valid_provenance(),
+            provenance=self.receipt,
             image_digest=AMD64_DIGEST,
             action="deploy",
             verify_clone=self.clone,
@@ -224,10 +292,10 @@ class RuntimePlanTests(unittest.TestCase):
     def test_unknown_digest_fails(self) -> None:
         with self.assertRaisesRegex(DeploymentError, "digest"):
             build_runtime_plan(
-                valid_approval(),
+                self.approval,
                 host="homeserver",
                 architecture="linux/amd64",
-                provenance=valid_provenance(),
+                provenance=self.receipt,
                 image_digest="sha256:" + "f" * 64,
                 action="deploy",
                 verify_clone=self.clone,
@@ -236,16 +304,16 @@ class RuntimePlanTests(unittest.TestCase):
     def test_rollback_binds_previous_approval_and_digest(self) -> None:
         approval = valid_approval()
         plan = build_runtime_plan(
-            approval,
+            self.approval,
             host="oserver",
             architecture="linux/arm64",
-            provenance=valid_provenance(),
-            image_digest=approval["rollback_platform_digests"]["linux/arm64"],
+            provenance=self.receipt,
+            image_digest=self.approval["rollback_platform_digests"]["linux/arm64"],
             action="rollback",
             verify_clone=self.clone,
         )
         self.assertEqual(plan["source_commit_sha"], SHA_V1)
-        self.assertEqual(plan["command"][-1], approval["rollback_platform_digests"]["linux/arm64"])
+        self.assertEqual(plan["command"][-1], self.approval["rollback_platform_digests"]["linux/arm64"])
 
 
 if __name__ == "__main__":

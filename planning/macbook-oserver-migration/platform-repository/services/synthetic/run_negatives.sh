@@ -47,30 +47,23 @@ grep -q "does not match the live clone" "$OUT/forged-provenance.txt" \
 
 echo "[neg3] wrong approved commit"
 mkdir -p /tmp/neg-badbundle
-BADIDX=$(mktemp)
-python3 - "$BUNDLE" "$BADIDX" <<PYGEN
+mkdir -p /tmp/neg-badbundle
+python3 - "$BUNDLE" <<PYGEN
 import hashlib, json, sys
 from pathlib import Path
-idx = json.loads((Path(sys.argv[1]) / "artifact-index.json").read_text())
+src = Path(sys.argv[1])
+idx = json.loads((src / "artifact-index.json").read_text())
 idx["source_commit_sha"] = "e" * 40
 raw = (json.dumps(idx, indent=2, sort_keys=True) + chr(10)).encode()
-Path(sys.argv[2]).write_bytes(raw)
+(Path("/tmp/neg-badbundle") / "artifact-index.json").write_bytes(raw)
 approval = dict(idx)
 approval["schema_version"] = "homeserver-synthetic-approval/v1"
 approval["artifact_index_digest"] = "sha256:" + hashlib.sha256(raw).hexdigest()
-Path("/tmp/neg-badbundle/approval.json").write_text(json.dumps(approval, indent=2))
-import shutil
-shutil.copyfile(Path(sys.argv[1]) / "artifact-index.json",
-                "/tmp/neg-badbundle/artifact-index-original.json")
+(Path("/tmp/neg-badbundle") / "approval.json").write_text(json.dumps(approval, indent=2))
 PYGEN
-cp "$BUNDLE/artifact-index.json" /tmp/neg-badbundle/artifact-index.json
-mv "$BUNDLE/approval.json" "$BUNDLE/approval.json.keep"
-cp /tmp/neg-badbundle/approval.json "$BUNDLE/approval.json"
-python3 "$ROLLOUT" plan --approval "$BUNDLE/approval.json" --clone "$CLONE" \
+python3 "$ROLLOUT" plan --approval /tmp/neg-badbundle/approval.json --clone "$CLONE" \
   --host homeserver --architecture linux/amd64 --image-digest "$AMD" \
   --action deploy --out-dir "$OUT/negwork" >"$OUT/wrong-commit.txt" 2>&1 || true
-mv "$BUNDLE/approval.json.keep" "$BUNDLE/approval.json"
-rm -f /tmp/neg-badbundle/artifact-index-original.json
 grep -q "does not match approved commit eee" "$OUT/wrong-commit.txt" \
   || fail neg3 "$OUT/wrong-commit.txt"
 
