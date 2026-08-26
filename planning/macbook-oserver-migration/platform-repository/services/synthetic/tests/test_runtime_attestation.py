@@ -147,5 +147,28 @@ class RuntimeAttestationTests(unittest.TestCase):
         ))
 
 
+class RollbackAttestationTests(unittest.TestCase):
+    def test_retained_rollback_image_needs_running_flow_not_health(self) -> None:
+        inspect = valid_inspect()
+        inspect[0]["State"] = {"Running": True}
+        inspect[0]["Config"]["Labels"]["homeserver.action"] = "rollback"
+        plan = valid_plan()
+        plan["action"] = "rollback"
+        self.assertEqual(
+            validate_runtime_attestation(inspect, plan, valid_endpoints(), "v2"), []
+        )
+
+    def test_rollback_still_rejects_stopped_container(self) -> None:
+        inspect = valid_inspect()
+        inspect[0]["State"] = {"Running": False}
+        inspect[0]["Config"]["Labels"]["homeserver.action"] = "rollback"
+        plan = valid_plan()
+        plan["action"] = "rollback"
+        self.assertIn(
+            "container is not running",
+            validate_runtime_attestation(inspect, plan, valid_endpoints(), "v2"),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

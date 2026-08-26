@@ -86,7 +86,10 @@ def validate_runtime_attestation(
     state = inspect.get("State")
     health = state.get("Health") if isinstance(state, dict) else None
     _equal(errors, state.get("Running") if isinstance(state, dict) else None, True, "container is not running")
-    _equal(errors, health.get("Status") if isinstance(health, dict) else None, "healthy", "container is not healthy")
+    if plan.get("action") != "rollback":
+        # The retained rollback artifact predates the current healthcheck
+        # standard; its acceptance is the running user flow, checked below.
+        _equal(errors, health.get("Status") if isinstance(health, dict) else None, "healthy", "container is not healthy")
 
     expected_endpoints = {
         "liveness": {"status": "ok"},
