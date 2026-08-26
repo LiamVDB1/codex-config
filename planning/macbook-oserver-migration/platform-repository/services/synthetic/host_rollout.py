@@ -74,10 +74,11 @@ def cmd_build(args: argparse.Namespace) -> int:
     if provenance["clean"] is not True:
         print("FAIL: refusing to build from a dirty clone")
         return 1
-    server_arch = _run(
-        ["docker", "version", "--format", "{{.Server.Architecture}}"]
-    ).stdout.strip()
-    derived_arch = {"amd64": "linux/amd64", "arm64": "linux/arm64"}.get(server_arch)
+    server_arch = _run(["docker", "info", "--format", "{{.Architecture}}"]).stdout.strip()
+    derived_arch = {
+        "x86_64": "linux/amd64", "amd64": "linux/amd64",
+        "aarch64": "linux/arm64", "arm64": "linux/arm64",
+    }.get(server_arch)
     if derived_arch is None:
         print(f"FAIL: unsupported server architecture {server_arch!r}")
         return 1
