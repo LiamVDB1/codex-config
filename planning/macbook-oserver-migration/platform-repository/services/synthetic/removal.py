@@ -79,7 +79,7 @@ def verify_absence(
         raise RemovalError(f"containers still present: {len(matches)}")
     if not inspect_not_found:
         raise RemovalError(
-            'docker inspect must fail with "No such object"; other failures are not absence'
+            "docker inspect must report no-such-object; other failures are not absence"
         )
     return {
         "schema_version": SCHEMA_ABSENCE,

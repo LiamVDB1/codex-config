@@ -216,7 +216,8 @@ def cmd_remove(args: argparse.Namespace) -> int:
     ps_after = ps_probe.stdout.splitlines()
     inspect_after = _run(["docker", "inspect", CONTAINER])
     inspect_not_found = (
-        inspect_after.returncode != 0 and "No such object" in (inspect_after.stderr or "")
+        inspect_after.returncode != 0
+        and "no such object" in (inspect_after.stderr or "").lower()
     )
     try:
         absence = removal.verify_absence(

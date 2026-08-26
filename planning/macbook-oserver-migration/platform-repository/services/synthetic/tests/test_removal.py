@@ -75,7 +75,7 @@ class RemovalIdentityTests(unittest.TestCase):
             )
         with self.assertRaisesRegex(RemovalError, "probe failed"):
             verify_absence([], ps_probe_ok=False, inspect_not_found=True)
-        with self.assertRaisesRegex(RemovalError, "No such object"):
+        with self.assertRaisesRegex(RemovalError, "no-such-object"):
             verify_absence([], ps_probe_ok=True, inspect_not_found=False)
 
 
