@@ -111,31 +111,46 @@ def validate_bundle(bundle: Path, *, version: str) -> dict[str, Any]:
     last_stamp: dict[str, str] = {}
     for host in hosts:
         architecture = arch_by_host[host]
-        for action in ("deploy", "rollback"):
-            plan = read(f"plan-{host}-{action}.json")
-            commit_field = "source_commit_sha" if action == "deploy" else "previous_approved_sha"
-            digest_field = "platform_digests" if action == "deploy" else "rollback_platform_digests"
-            if plan.get("action") != action or plan.get("host") != host:
-                errors.append(f"plan-{host}-{action} identity fields are inconsistent")
-            if plan.get("source_commit_sha") != approval[commit_field]:
-                errors.append(f"plan-{host}-{action} binds the wrong approved commit")
-            if plan.get("image_digest") != approval[digest_field][architecture]:
-                errors.append(f"plan-{host}-{action} binds the wrong approved digest")
-            if action == "deploy" and plan.get("provenance_subdir_tree") != subtree_by_host.get(host):
-                errors.append(f"plan-{host}-deploy does not bind the measured source subtree")
+        actions = [("deploy", approval["source_commit_sha"], approval["platform_digests"][architecture])]
+        if (bundle / f"attest-{host}-recover.json").is_file() or True:
+            actions.append(("recover", approval["source_commit_sha"], approval["platform_digests"][architecture]))
+        actions.append(("rollback", approval["previous_approved_sha"], approval["rollback_platform_digests"][architecture]))
+        for action, stage_commit, stage_digest in actions:
+            if action == "recover":
+                # Stateless recovery re-runs the approved deploy plan after an
+                # identity-checked removal; it emits its own attestation only.
+                plan = read(f"plan-{host}-deploy.json")
+            else:
+                plan = read(f"plan-{host}-{action}.json")
+                commit_field = "source_commit_sha" if action == "deploy" else "previous_approved_sha"
+                digest_field = "platform_digests" if action == "deploy" else "rollback_platform_digests"
+                if plan.get("action") != action or plan.get("host") != host:
+                    errors.append(f"plan-{host}-{action} identity fields are inconsistent")
+                if plan.get("source_commit_sha") != approval[commit_field]:
+                    errors.append(f"plan-{host}-{action} binds the wrong approved commit")
+                if plan.get("image_digest") != approval[digest_field][architecture]:
+                    errors.append(f"plan-{host}-{action} binds the wrong approved digest")
+                if action == "deploy" and plan.get("provenance_subdir_tree") != subtree_by_host.get(host):
+                    errors.append(f"plan-{host}-deploy does not bind the measured source subtree")
 
-            attest = read(f"attest-{host}-{action}.json")
+            attest_name = f"attest-{host}-{action}.json"
+            attest = read(attest_name)
             health = attest.get("health")
             endpoint_errors = runtime_attestation.validate_runtime_attestation(
                 attest.get("inspect"), plan, health if isinstance(health, dict) else {}, version
             )
             errors.extend(f"{host}/{action}: {item}" for item in endpoint_errors)
             _check_inspect_matches_plan(attest.get("inspect"), plan)
+            if attest.get("inspect", [{}])[0].get("Image") != stage_digest:
+                errors.append(f"{host}/{action}: attested image is not the staged digest")
 
-            plan_time = stamp(f"plan-{host}-{action}", plan.get("captured_at"))
+            if action != "recover":
+                plan_time = stamp(f"plan-{host}-{action}", plan.get("captured_at"))
+            else:
+                plan_time = stamp(f"plan-{host}-deploy", read(f"plan-{host}-deploy.json").get("captured_at"))
             attest_time = stamp(f"attest-{host}-{action}", attest.get("captured_at"))
             previous = last_stamp.get(host)
-            if previous and plan_time < previous:
+            if action != "recover" and previous and plan_time < previous:
                 errors.append(f"{host}: plan timestamp moves backwards before {action}")
             if attest_time <= plan_time:
                 errors.append(f"{host}/{action}: attestation does not follow its plan")

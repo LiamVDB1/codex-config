@@ -131,9 +131,21 @@ def build_bundle(bundle: Path) -> None:
         clock += 1
         for action, commit, digest_map in (
             ("deploy", SHA_V2, DIGESTS),
+            ("recover", SHA_V2, DIGESTS),
             ("rollback", SHA_V1, ROLLBACK),
         ):
-            digest = digest_map[arch]
+            arch_digest = digest_map[arch]
+            if action == "recover":
+                _write(
+                    bundle / f"attest-{host}-recover.json",
+                    {
+                        "inspect": _inspect(SHA_V2, DIGESTS[arch], "deploy"),
+                        "health": _health(),
+                        "captured_at": _ts(clock),
+                    },
+                )
+                clock += 1
+                continue
             _write(
                 bundle / f"plan-{host}-{action}.json",
                 {
@@ -145,7 +157,7 @@ def build_bundle(bundle: Path) -> None:
                     "architecture": arch,
                     "source_commit_sha": commit,
                     "provenance_subdir_tree": TREE,
-                    "image_digest": digest,
+                    "image_digest": arch_digest,
                     "health_urls": ["http://127.0.0.1:18180/healthz"],
                     "remove_command": ["docker", "rm", "--force", "homeserver-synthetic"],
                 },
@@ -154,7 +166,7 @@ def build_bundle(bundle: Path) -> None:
             _write(
                 bundle / f"attest-{host}-{action}.json",
                 {
-                    "inspect": _inspect(commit, digest, action),
+                    "inspect": _inspect(commit, arch_digest, action),
                     "health": _health(),
                     "captured_at": _ts(clock),
                 },
