@@ -65,22 +65,27 @@ def capture_removal_identity(
 
 def verify_absence(
     ps_lines: list[str],
-    inspect_failed: bool,
     *,
+    ps_probe_ok: bool,
+    inspect_not_found: bool,
     container_name: str = "homeserver-synthetic",
     now: Any = None,
 ) -> dict[str, Any]:
-    """Prove no container with the managed name exists in any state."""
+    """Prove absence: empty ps result plus an explicit docker "No such object"."""
+    if not ps_probe_ok:
+        raise RemovalError("docker ps probe failed; absence cannot be established")
     matches = [line for line in ps_lines if line.strip()]
     if matches:
         raise RemovalError(f"containers still present: {len(matches)}")
-    if not inspect_failed:
-        raise RemovalError("docker inspect must fail after removal")
+    if not inspect_not_found:
+        raise RemovalError(
+            'docker inspect must fail with "No such object"; other failures are not absence'
+        )
     return {
         "schema_version": SCHEMA_ABSENCE,
         "container_name": container_name,
         "ps_matches": 0,
-        "inspect_absent": True,
+        "inspect_not_found": True,
         "captured_at": (_utc_now() if now is None else now),
     }
 
@@ -99,8 +104,7 @@ def main() -> int:
             receipt = capture_removal_identity(json.loads(args.inspect.read_text()), json.loads(args.plan.read_text()))
             print(json.dumps(receipt, indent=2, sort_keys=True))
             return 0
-        ps_lines = args.ps_file.read_text().splitlines() if args.ps_file else []
-        receipt = verify_absence(ps_lines, inspect_failed=True)
+        raise RemovalError("use host_rollout.py remove; standalone absence mode is disabled")
         print(json.dumps(receipt, indent=2, sort_keys=True))
         return 0
     except (RemovalError, OSError, json.JSONDecodeError) as exc:

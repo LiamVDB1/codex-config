@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -118,46 +119,78 @@ class ApprovalTests(unittest.TestCase):
                     load_approval(path)
 
 
+_KEEPALIVE = []
+
+
+def _make_clone() -> Path:
+    """Minimal canonical-shaped git clone for live rederivation."""
+    tmp = tempfile.TemporaryDirectory()
+    _KEEPALIVE.append(tmp)
+    base = Path(tmp.name)
+    sub = "planning/macbook-oserver-migration/platform-repository"
+    seed = base / "seed"
+    seed.mkdir(parents=True)
+
+    def g(*args):
+        subprocess.run(["git", *args], check=True, capture_output=True)
+
+    g("init", "-q", "-b", "main", str(seed))
+    (seed / sub).mkdir(parents=True)
+    (seed / sub / "repository.json").write_text("{}")
+    g("-C", str(seed), "add", ".")
+    g("-C", str(seed), "-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "x")
+    bare = base / "origin.git"
+    g("init", "-q", "--bare", str(bare))
+    g("-C", str(seed), "push", "-q", str(bare), "main")
+    clone = base / "clone"
+    g("clone", "-q", str(bare), str(clone))
+    g("-C", str(clone), "remote", "set-url", "origin",
+      "https://github.com/LiamVDB1/codex-config.git")
+    return clone
+
+
+def _clone_fixture() -> Path:
+    return _make_clone()
+
+
 class ProvenanceGateTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.clone = _clone_fixture()
+
+    def _plan(self, **overrides):
+        args = dict(
+            approval=valid_approval(),
+            host="homeserver",
+            architecture="linux/amd64",
+            provenance=valid_provenance(),
+            image_digest=AMD64_DIGEST,
+            action="deploy",
+            verify_clone=self.clone,
+        )
+        args.update(overrides)
+        return build_runtime_plan(**args)
+
     def test_dirty_measured_provenance_fails(self) -> None:
         provenance = valid_provenance()
         provenance["clean"] = False
-        with self.assertRaisesRegex(DeploymentError, "clean"):
-            build_runtime_plan(
-                valid_approval(),
-                host="homeserver",
-                architecture="linux/amd64",
-                provenance=provenance,
-                image_digest=AMD64_DIGEST,
-                action="deploy",
-            )
+        with self.assertRaisesRegex(DeploymentError, "not clean"):
+            self._plan(provenance=provenance)
 
     def test_wrong_head_fails(self) -> None:
-        with self.assertRaisesRegex(DeploymentError, "approved commit"):
-            build_runtime_plan(
-                valid_approval(),
-                host="homeserver",
-                architecture="linux/amd64",
-                provenance=valid_provenance(head=SHA_V1),
-                image_digest=AMD64_DIGEST,
-                action="deploy",
-            )
+        with self.assertRaisesRegex(DeploymentError, "does not match approved commit"):
+            self._plan(provenance=valid_provenance(head=SHA_V1))
 
     def test_unsupported_provenance_schema_fails(self) -> None:
         provenance = valid_provenance()
         provenance["schema_version"] = "asserted/v1"
         with self.assertRaisesRegex(DeploymentError, "schema"):
-            build_runtime_plan(
-                valid_approval(),
-                host="homeserver",
-                architecture="linux/amd64",
-                provenance=provenance,
-                image_digest=AMD64_DIGEST,
-                action="deploy",
-            )
+            self._plan(provenance=provenance)
 
 
 class RuntimePlanTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.clone = _clone_fixture()
+
     def test_approved_plan_is_loopback_only_and_hardened(self) -> None:
         plan = build_runtime_plan(
             valid_approval(),
@@ -166,6 +199,7 @@ class RuntimePlanTests(unittest.TestCase):
             provenance=valid_provenance(),
             image_digest=AMD64_DIGEST,
             action="deploy",
+            verify_clone=self.clone,
         )
         command = plan["command"]
         self.assertIn("127.0.0.1:18180:8080", command)
@@ -184,6 +218,7 @@ class RuntimePlanTests(unittest.TestCase):
                 provenance=valid_provenance(),
                 image_digest=ARM64_DIGEST,
                 action="deploy",
+                verify_clone=self.clone,
             )
 
     def test_unknown_digest_fails(self) -> None:
@@ -195,6 +230,7 @@ class RuntimePlanTests(unittest.TestCase):
                 provenance=valid_provenance(),
                 image_digest="sha256:" + "f" * 64,
                 action="deploy",
+                verify_clone=self.clone,
             )
 
     def test_rollback_binds_previous_approval_and_digest(self) -> None:
@@ -206,6 +242,7 @@ class RuntimePlanTests(unittest.TestCase):
             provenance=valid_provenance(),
             image_digest=approval["rollback_platform_digests"]["linux/arm64"],
             action="rollback",
+            verify_clone=self.clone,
         )
         self.assertEqual(plan["source_commit_sha"], SHA_V1)
         self.assertEqual(plan["command"][-1], approval["rollback_platform_digests"]["linux/arm64"])

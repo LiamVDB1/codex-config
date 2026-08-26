@@ -80,16 +80,6 @@ def validate_bundle(bundle: Path, *, version: str, rollback_version: str) -> dic
         stage_stamps.append((label, parsed))
         return parsed
 
-    builds: dict[str, dict[str, Any]] = {}
-    for architecture in sorted(HOST_ARCHITECTURES.values()):
-        build = read(f"build-{architecture.replace('/', '_')}.json")
-        if build.get("image_id") != approval["platform_digests"][architecture]:
-            errors.append(f"build {architecture} image id does not match approved digest")
-        if build.get("schema_version") != "homeserver-synthetic-build/v1":
-            errors.append(f"build {architecture} schema is unsupported")
-        stamp(f"build/{architecture}", build.get("captured_at"))
-        builds[architecture] = build
-
     provenance_by_host: dict[str, dict[str, Any]] = {}
     subtree_by_host: dict[str, str] = {}
     for host in hosts:
@@ -108,6 +98,20 @@ def validate_bundle(bundle: Path, *, version: str, rollback_version: str) -> dic
     if len(set(subtree_by_host.values())) > 1:
         errors.append("hosts disagree on the bound source subtree hash")
 
+    builds: dict[str, dict[str, Any]] = {}
+    for architecture in sorted(HOST_ARCHITECTURES.values()):
+        build = read(f"build-{architecture.replace('/', '_')}.json")
+        if build.get("image_id") != approval["platform_digests"][architecture]:
+            errors.append(f"build {architecture} image id does not match approved digest")
+        if build.get("schema_version") != "homeserver-synthetic-build/v1":
+            errors.append(f"build {architecture} schema is unsupported")
+        if subtree_by_host and build.get("source_subdir_tree") not in set(
+            subtree_by_host.values()
+        ):
+            errors.append(f"build {architecture} subtree does not match the measured provenance")
+        stamp(f"build/{architecture}", build.get("captured_at"))
+        builds[architecture] = build
+
     last_stamp: dict[str, str] = {}
     for host in hosts:
         architecture = arch_by_host[host]
@@ -122,13 +126,19 @@ def validate_bundle(bundle: Path, *, version: str, rollback_version: str) -> dic
                 # identity-checked removal whose own receipts are required.
                 plan = read(f"plan-{host}-deploy.json")
                 rec_identity = read(f"removal-identity-{host}-recover.json")
+                if rec_identity.get("schema_version") != "homeserver-synthetic-removal-identity/v1":
+                    errors.append(f"{host}: recovery removal schema is unsupported")
+                if rec_identity.get("container_name") != "homeserver-synthetic":
+                    errors.append(f"{host}: recovery removal names the wrong container")
+                if rec_identity.get("action") != "deploy":
+                    errors.append(f"{host}: recovery removal action does not match the deploy plan")
                 if rec_identity.get("image_digest") != approval["platform_digests"][architecture]:
                     errors.append(f"{host}: recovery removal is not the deployed runtime")
                 if rec_identity.get("source_commit_sha") != approval["source_commit_sha"]:
                     errors.append(f"{host}: recovery removal is not the deployed commit")
                 stamp(f"removal-identity/{host}-recover", rec_identity.get("captured_at"))
                 rec_absence = read(f"absence-proof-{host}-recover.json")
-                if rec_absence.get("ps_matches") != 0 or rec_absence.get("inspect_absent") is not True:
+                if rec_absence.get("ps_matches") != 0 or rec_absence.get("inspect_not_found") is not True:
                     errors.append(f"{host}: recovery absence proof does not prove emptiness")
                 stamp(f"absence/{host}-recover", rec_absence.get("captured_at"))
             else:
@@ -172,14 +182,25 @@ def validate_bundle(bundle: Path, *, version: str, rollback_version: str) -> dic
 
         identity = read(f"removal-identity-{host}.json")
         absence = read(f"absence-proof-{host}.json")
+        if identity.get("schema_version") != "homeserver-synthetic-removal-identity/v1":
+            errors.append(f"{host}: final removal schema is unsupported")
+        if identity.get("container_name") != "homeserver-synthetic":
+            errors.append(f"{host}: final removal names the wrong container")
+        if identity.get("action") != "rollback":
+            errors.append(f"{host}: final removal action does not match the rollback plan")
+        if absence.get("schema_version") != "homeserver-synthetic-absence-proof/v1":
+            errors.append(f"{host}: absence proof schema is unsupported")
+        if absence.get("container_name") != "homeserver-synthetic":
+            errors.append(f"{host}: absence proof names the wrong container")
+        if absence.get("inspect_not_found") is not True:
+            errors.append(f"{host}: absence proof must record docker no-such-object evidence")
         identity_time = stamp(f"removal-identity/{host}", identity.get("captured_at"))
         absence_time = stamp(f"absence/{host}", absence.get("captured_at"))
         if identity.get("image_digest") != approval["rollback_platform_digests"][architecture]:
             errors.append(f"{host}: removed identity is not the rollback runtime")
         if identity.get("source_commit_sha") != approval["previous_approved_sha"]:
             errors.append(f"{host}: removed identity is not the rollback commit")
-        if absence.get("ps_matches") != 0 or absence.get("inspect_absent") is not True:
-            errors.append(f"{host}: absence proof does not prove emptiness")
+
         if identity_time < last_stamp[host]:
             errors.append(f"{host}: removal identity does not follow the final attestation")
         if absence_time < identity_time:

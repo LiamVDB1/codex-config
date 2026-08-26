@@ -109,14 +109,15 @@ def require_provenance(
     approval: dict[str, Any],
     *,
     action: str,
-    verify_clone: Any = None,
+    verify_clone: Any,
 ) -> dict[str, Any]:
     """Cross-check a measured provenance receipt against the approval.
 
-    When verify_clone is provided the receipt is not trusted on its own: the
-    same fields are re-derived from that clone and must match exactly.
+    verify_clone is mandatory: the receipt is never trusted on its own; the
+    same fields are re-derived from the live clone and must match exactly.
     """
-    if verify_clone is not None:
+    if verify_clone is None:
+        raise DeploymentError("live clone verification is mandatory")
         derived = _rederive_from_clone(verify_clone)
         for field in ("head", "clean", "subdir_tree", "remote_url", "contained_branches"):
             if provenance.get(field) != derived.get(field):
@@ -149,7 +150,7 @@ def build_runtime_plan(
     provenance: dict[str, Any],
     image_digest: str,
     action: str,
-    verify_clone: Any = None,
+    verify_clone: Any,
 ) -> dict[str, Any]:
     if host not in HOST_ARCHITECTURES:
         raise DeploymentError(f"unknown host: {host}")
@@ -222,6 +223,7 @@ def main() -> int:
     parser.add_argument("--host", choices=sorted(HOST_ARCHITECTURES), required=True)
     parser.add_argument("--architecture", choices=sorted(HOST_ARCHITECTURES.values()), required=True)
     parser.add_argument("--provenance", type=Path, required=True)
+    parser.add_argument("--verify-clone", type=Path, required=True)
     parser.add_argument("--image-digest", required=True)
     parser.add_argument("--action", choices=("deploy", "rollback"), required=True)
     parser.add_argument("--output", type=Path)
@@ -240,6 +242,7 @@ def main() -> int:
             provenance=provenance,
             image_digest=args.image_digest,
             action=args.action,
+            verify_clone=args.verify_clone,
         )
     except DeploymentError as exc:
         print(f"FAIL: {exc}")

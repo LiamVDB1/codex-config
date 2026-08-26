@@ -63,8 +63,14 @@ def cmd_provenance(args: argparse.Namespace) -> int:
 
 
 def cmd_build(args: argparse.Namespace) -> int:
-    provenance = json.loads(args.provenance.read_text())
-    context = args.clone / _repository_metadata()["source_subdir"]
+    repository = _repository_metadata()
+    provenance = git_provenance.collect_git_provenance(
+        args.clone,
+        expected_remote=repository["canonical_remote"],
+        allowed_branches=[repository["canonical_branch"], "codex/homeserver-platform"],
+        source_subdir=repository["source_subdir"],
+    )
+    context = args.clone / repository["source_subdir"]
     tag = f"homeserver-synthetic:candidate-{provenance['head'][:12]}"
     result = _run(
         [
@@ -201,13 +207,23 @@ def cmd_remove(args: argparse.Namespace) -> int:
         print("FAIL: docker rm failed")
         return 1
 
-    ps_after = _run(
+    ps_probe = _run(
         ["docker", "ps", "-a", "--filter", f"name=^{CONTAINER}$", "--format", "{{.ID}}"]
-    ).stdout.splitlines()
+    )
+    if ps_probe.returncode != 0:
+        print("FAIL: docker ps probe failed during absence verification")
+        return 1
+    ps_after = ps_probe.stdout.splitlines()
     inspect_after = _run(["docker", "inspect", CONTAINER])
+    inspect_not_found = (
+        inspect_after.returncode != 0 and "No such object" in (inspect_after.stderr or "")
+    )
     try:
         absence = removal.verify_absence(
-            ps_after, inspect_failed=inspect_after.returncode != 0, container_name=CONTAINER
+            ps_lines=ps_after,
+            ps_probe_ok=ps_probe.returncode == 0,
+            inspect_not_found=inspect_not_found,
+            container_name=CONTAINER,
         )
     except removal.RemovalError as exc:
         print(f"FAIL: {exc}")
@@ -228,7 +244,6 @@ def main() -> int:
 
     p = sub.add_parser("build")
     p.add_argument("--clone", type=Path, required=True)
-    p.add_argument("--provenance", type=Path, required=True)
     p.add_argument("--architecture", choices=sorted(deployment.HOST_ARCHITECTURES.values()), required=True)
     p.add_argument("--version", required=True)
     p.add_argument("--output", type=Path, required=True)

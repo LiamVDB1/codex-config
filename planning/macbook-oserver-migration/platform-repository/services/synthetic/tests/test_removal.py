@@ -63,14 +63,20 @@ class RemovalIdentityTests(unittest.TestCase):
         with self.assertRaisesRegex(RemovalError, "target"):
             capture_removal_identity(payload, plan())
 
-    def test_absence_proof_passes_only_when_empty(self) -> None:
-        receipt = verify_absence([], inspect_failed=True, now="2026-08-26T00:01:00Z")
+    def test_absence_proof_passes_only_when_empty_and_confirmed(self) -> None:
+        receipt = verify_absence(
+            [], ps_probe_ok=True, inspect_not_found=True, now="2026-08-26T00:01:00Z"
+        )
         self.assertEqual(receipt["ps_matches"], 0)
-        self.assertTrue(receipt["inspect_absent"])
+        self.assertTrue(receipt["inspect_not_found"])
         with self.assertRaisesRegex(RemovalError, "still present"):
-            verify_absence(["abc123 homeserver-synthetic"], inspect_failed=True)
-        with self.assertRaisesRegex(RemovalError, "must fail"):
-            verify_absence([], inspect_failed=False)
+            verify_absence(
+                ["abc123"], ps_probe_ok=True, inspect_not_found=True
+            )
+        with self.assertRaisesRegex(RemovalError, "probe failed"):
+            verify_absence([], ps_probe_ok=False, inspect_not_found=True)
+        with self.assertRaisesRegex(RemovalError, "No such object"):
+            verify_absence([], ps_probe_ok=True, inspect_not_found=False)
 
 
 if __name__ == "__main__":

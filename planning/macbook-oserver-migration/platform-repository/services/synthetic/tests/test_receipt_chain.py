@@ -155,7 +155,7 @@ def build_bundle(bundle: Path) -> None:
                         "schema_version": "homeserver-synthetic-absence-proof/v1",
                         "container_name": "homeserver-synthetic",
                         "ps_matches": 0,
-                        "inspect_absent": True,
+                        "inspect_not_found": True,
                         "captured_at": _ts(clock),
                     },
                 )
@@ -214,7 +214,7 @@ def build_bundle(bundle: Path) -> None:
                 "schema_version": "homeserver-synthetic-absence-proof/v1",
                 "container_name": "homeserver-synthetic",
                 "ps_matches": 0,
-                "inspect_absent": True,
+                "inspect_not_found": True,
                 "captured_at": _ts(clock),
             },
         )
