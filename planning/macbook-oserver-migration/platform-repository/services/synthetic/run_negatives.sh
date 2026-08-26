@@ -2,92 +2,100 @@
 # Deterministic mandatory-negative runner for the synthetic rollout.
 # Usage: run_negatives.sh <clone> <bundle-dir> <out-dir> <amd64-digest> <arm64-digest>
 set -u
-C="$1"; B="$2"; N="$3"; AMD="$4"; ARM="$5"
-S="$C/planning/macbook-oserver-migration/platform-repository/services/synthetic"
-R="python3 $S/host_rollout.py"
-mkdir -p "$N" /tmp/negdir-work
+CLONE="$1"
+BUNDLE="$2"
+OUT="$3"
+AMD="$4"
+
+REPO_DIR="$CLONE/planning/macbook-oserver-migration/platform-repository"
+SYNTH="$REPO_DIR/services/synthetic"
+ROLLOUT="$SYNTH/host_rollout.py"
+mkdir -p "$OUT" "$(mktemp -u)"
+
+fail() { echo "UNEXPECTED($1): see $2"; }
 
 echo "[neg1] dirty source"
-touch "$C/planning/macbook-oserver-migration/platform-repository/services/synthetic/dirt.txt"
-"$R" plan --approval "$B/approval.json" --clone "$C" --host homeserver \
-  --architecture linux/amd64 --image-digest "$AMD" --action deploy \
-  --out-dir /tmp/negdir-work >"$N/dirty-source.txt" 2>&1 || true
-git -C "$C" clean -qfd planning/ ; git -C "$C" checkout -q -- .
-grep -q "not clean" "$N/dirty-source.txt" || echo "UNEXPECTED: dirty-source not rejected"
+touch "$SYNTH/dirt.txt"
+python3 "$ROLLOUT" plan --approval "$BUNDLE/approval.json" --clone "$CLONE" \
+  --host homeserver --architecture linux/amd64 --image-digest "$AMD" \
+  --action deploy --out-dir "$OUT/negwork" >"$OUT/dirty-source.txt" 2>&1 || true
+git -C "$CLONE" clean -qfd planning/
+git -C "$CLONE" checkout -q -- .
+grep -q "not clean" "$OUT/dirty-source.txt" \
+  || fail neg1 "$OUT/dirty-source.txt"
 
 echo "[neg2] forged provenance receipt vs live clone"
-FORGED=$(mktemp -d)
-python3 - "$B" "$S" "$C" "$AMD" "$N" <<'PY'
+cat > "$OUT/forged_neg.py" <<FORGE
 import json, sys
 from pathlib import Path
-bundle, sdir, clone, amd, out = sys.argv[1:6]
-sys.path.insert(0, sdir)
+sys.path.insert(0, "$SYNTH")
 from deployment import build_runtime_plan, DeploymentError
-approval = json.load(open(Path(bundle) / "approval.json"))
-forged = json.load(open(Path(bundle) / "provenance-homeserver.json"))
+approval = json.load(open("$BUNDLE/approval.json"))
+forged = json.load(open("$BUNDLE/provenance-homeserver.json"))
 forged["subdir_tree"] = "0" * 40
 try:
     build_runtime_plan(approval, host="homeserver", architecture="linux/amd64",
-        provenance=forged, image_digest=amd, action="deploy", verify_clone=Path(clone))
+        provenance=forged, image_digest="$AMD", action="deploy",
+        verify_clone=Path("$CLONE"))
     print("NOT REJECTED")
 except DeploymentError as exc:
-    print(f"FAIL: {exc}")
-PY
-grep -q "does not match the live clone" "$N/forged-provenance.txt" 2>/dev/null || python3 - "$B" "$S" "$C" "$AMD" > "$N/forged-provenance.txt" 2>&1 <<'PY' || true
-import json, sys
-from pathlib import Path
-bundle, sdir, clone, amd = sys.argv[1:5]
-sys.path.insert(0, sdir)
-from deployment import build_runtime_plan, DeploymentError
-approval = json.load(open(Path(bundle) / "approval.json"))
-forged = json.load(open(Path(bundle) / "provenance-homeserver.json"))
-forged["subdir_tree"] = "0" * 40
-try:
-    build_runtime_plan(approval, host="homeserver", architecture="linux/amd64",
-        provenance=forged, image_digest=amd, action="deploy", verify_clone=Path(clone))
-    print("NOT REJECTED")
-except DeploymentError as exc:
-    print(f"FAIL: {exc}")
-PY
-grep -q "does not match the live clone" "$N/forged-provenance.txt" && echo "[neg2] rejected" || echo "UNEXPECTED: forged-provenance accepted"
+    print("FAIL:", exc)
+FORGE
+python3 "$OUT/forged_neg.py" >"$OUT/forged-provenance.txt" 2>&1 || true
+grep -q "does not match the live clone" "$OUT/forged-provenance.txt" \
+  || fail neg2 "$OUT/forged-provenance.txt"
 
 echo "[neg3] wrong approved commit"
 mkdir -p /tmp/neg-badbundle
-python3 - "$B" <<'PY'
-import json, hashlib, sys
+BADIDX=$(mktemp)
+python3 - "$BUNDLE" "$BADIDX" <<PYGEN
+import hashlib, json, sys
 from pathlib import Path
-b = Path(sys.argv[1])
-idx = json.loads((b / "artifact-index.json").read_text())
+idx = json.loads((Path(sys.argv[1]) / "artifact-index.json").read_text())
 idx["source_commit_sha"] = "e" * 40
-raw = (json.dumps(idx, indent=2, sort_keys=True) + "
-").encode()
-(b2 := Path("/tmp/neg-badbundle")).mkdir(exist_ok=True)
-(b2 / "artifact-index.json").write_bytes(raw)
-a = dict(idx); a["schema_version"] = "homeserver-synthetic-approval/v1"
-a["artifact_index_digest"] = "sha256:" + hashlib.sha256(raw).hexdigest()
-(b2 / "approval.json").write_text(json.dumps(a, indent=2))
-PY
-"$R" plan --approval /tmp/neg-badbundle/approval.json --clone "$C" --host homeserver \
-  --architecture linux/amd64 --image-digest "$AMD" --action deploy \
-  --out-dir /tmp/negdir-work >"$N/wrong-commit.txt" 2>&1 || true
-grep -q "does not match approved commit eee" "$N/wrong-commit.txt" || echo "UNEXPECTED: wrong-commit not rejected"
+raw = (json.dumps(idx, indent=2, sort_keys=True) + chr(10)).encode()
+Path(sys.argv[2]).write_bytes(raw)
+approval = dict(idx)
+approval["schema_version"] = "homeserver-synthetic-approval/v1"
+approval["artifact_index_digest"] = "sha256:" + hashlib.sha256(raw).hexdigest()
+Path("/tmp/neg-badbundle/approval.json").write_text(json.dumps(approval, indent=2))
+import shutil
+shutil.copyfile(Path(sys.argv[1]) / "artifact-index.json",
+                "/tmp/neg-badbundle/artifact-index-original.json")
+PYGEN
+cp "$BUNDLE/artifact-index.json" /tmp/neg-badbundle/artifact-index.json
+mv "$BUNDLE/approval.json" "$BUNDLE/approval.json.keep"
+cp /tmp/neg-badbundle/approval.json "$BUNDLE/approval.json"
+python3 "$ROLLOUT" plan --approval "$BUNDLE/approval.json" --clone "$CLONE" \
+  --host homeserver --architecture linux/amd64 --image-digest "$AMD" \
+  --action deploy --out-dir "$OUT/negwork" >"$OUT/wrong-commit.txt" 2>&1 || true
+mv "$BUNDLE/approval.json.keep" "$BUNDLE/approval.json"
+rm -f /tmp/neg-badbundle/artifact-index-original.json
+grep -q "does not match approved commit eee" "$OUT/wrong-commit.txt" \
+  || fail neg3 "$OUT/wrong-commit.txt"
 
 echo "[neg4] unapproved digest"
-"$R" plan --approval "$B/approval.json" --clone "$C" --host homeserver \
-  --architecture linux/amd64 --image-digest sha256:$(printf '0%.0s' {1..64}) --action deploy \
-  --out-dir /tmp/negdir-work >"$N/unapproved-digest.txt" 2>&1 || true
-grep -q "is not approved" "$N/unapproved-digest.txt" || echo "UNEXPECTED: unapproved-digest not rejected"
+ZERODIGEST="sha256:0000000000000000000000000000000000000000000000000000000000000000"
+python3 "$ROLLOUT" plan --approval "$BUNDLE/approval.json" --clone "$CLONE" \
+  --host homeserver --architecture linux/amd64 --image-digest "$ZERODIGEST" \
+  --action deploy --out-dir "$OUT/negwork" >"$OUT/unapproved-digest.txt" 2>&1 || true
+grep -q "is not approved" "$OUT/unapproved-digest.txt" \
+  || fail neg4 "$OUT/unapproved-digest.txt"
 
 echo "[neg5] architecture swap"
-"$R" plan --approval "$B/approval.json" --clone "$C" --host homeserver \
-  --architecture linux/arm64 --image-digest "$ARM" --action deploy \
-  --out-dir /tmp/negdir-work >"$N/arch-swap.txt" 2>&1 || true
-grep -qE "not approved for|is not approved" "$N/arch-swap.txt" || echo "UNEXPECTED: arch-swap not rejected"
+ARM="$5"
+python3 "$ROLLOUT" plan --approval "$BUNDLE/approval.json" --clone "$CLONE" \
+  --host homeserver --architecture linux/arm64 --image-digest "$ARM" \
+  --action deploy --out-dir "$OUT/negwork" >"$OUT/arch-swap.txt" 2>&1 || true
+grep -qE "not approved for|is not approved" "$OUT/arch-swap.txt" \
+  || fail neg5 "$OUT/arch-swap.txt"
 
 echo "[neg6] rollback digest on deploy action"
-"$R" plan --approval "$B/approval.json" --clone "$C" --host homeserver \
-  --architecture linux/amd64 --image-digest sha256:83798683c1c4af2023438e53dd29cb5acf809dc8d4f3c3fe8d9c89cda73c4618 \
-  --action deploy --out-dir /tmp/negdir-work >"$N/rollback-as-deploy.txt" 2>&1 || true
-grep -q "is not approved" "$N/rollback-as-deploy.txt" || echo "UNEXPECTED: rollback-as-deploy not rejected"
+ROLLBACK_AMD="sha256:83798683c1c4af2023438e53dd29cb5acf809dc8d4f3c3fe8d9c89cda73c4618"
+python3 "$ROLLOUT" plan --approval "$BUNDLE/approval.json" --clone "$CLONE" \
+  --host homeserver --architecture linux/amd64 --image-digest "$ROLLBACK_AMD" \
+  --action deploy --out-dir "$OUT/negwork" >"$OUT/rollback-as-deploy.txt" 2>&1 || true
+grep -q "is not approved" "$OUT/rollback-as-deploy.txt" \
+  || fail neg6 "$OUT/rollback-as-deploy.txt"
 
 echo "== negatives complete =="
