@@ -11,6 +11,11 @@ from typing import Any
 CONTAINER_NAME = "/homeserver-synthetic"
 EXPECTED_BINDING = ("127.0.0.1", "18180")
 EXPECTED_PORT = "8080/tcp"
+SAFE_ENV_NAMES = {
+    "PATH", "LANG", "GPG_KEY", "PYTHON_VERSION", "PYTHON_PIP_VERSION",
+    "PYTHON_SETUPTOOLS_VERSION", "PYTHONUNBUFFERED", "PYTHONDONTWRITEBYTECODE",
+    "HOSTNAME", "HOME", "TERM",
+}
 
 
 def _equal(errors: list[str], actual: Any, expected: Any, message: str) -> None:
@@ -55,9 +60,14 @@ def validate_runtime_attestation(
         _equal(errors, labels.get("homeserver.source_commit"), plan.get("source_commit_sha"), "container source commit does not match approved source")
         _equal(errors, labels.get("homeserver.action"), plan.get("action"), "container action does not match approved action")
     _equal(errors, config.get("User"), "65532:65532", "container must run as the unprivileged 65532:65532 user")
-    env = config.get("Env")
-    if env is not None and env != []:
-        errors.append("container environment must be empty")
+    env = config.get("Env") or []
+    unsafe = sorted(
+        entry.split("=", 1)[0]
+        for entry in env
+        if isinstance(entry, str) and entry.split("=", 1)[0] not in SAFE_ENV_NAMES
+    )
+    if unsafe:
+        errors.append("container environment carries non-base variables: " + ",".join(unsafe))
 
     host_config = inspect.get("HostConfig")
     if not isinstance(host_config, dict):

@@ -125,10 +125,18 @@ class RuntimeAttestationTests(unittest.TestCase):
 
     def test_environment_leakage_fails(self) -> None:
         inspect = valid_inspect()
-        inspect[0]["Config"]["Env"] = ["PATH=/usr/bin"]
+        inspect[0]["Config"]["Env"] = ["API_TOKEN=leaked"]
         self.assertIn(
-            "container environment must be empty",
+            "container environment carries non-base variables: API_TOKEN",
             validate_runtime_attestation(inspect, valid_plan(), valid_endpoints(), "v2"),
+        )
+
+    def test_base_image_env_is_allowed(self) -> None:
+        inspect = valid_inspect()
+        inspect[0]["Config"]["Env"] = ["PATH=/usr/local/bin:/usr/bin", "LANG=C.UTF-8"]
+        self.assertEqual(
+            validate_runtime_attestation(inspect, valid_plan(), valid_endpoints(), "v2"),
+            [],
         )
 
     def test_extra_endpoint_evidence_fails_closed(self) -> None:

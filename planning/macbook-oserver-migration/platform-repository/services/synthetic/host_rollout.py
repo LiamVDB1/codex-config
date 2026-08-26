@@ -132,10 +132,13 @@ def _capture_attestation(plan_path: Path, version: str) -> dict[str, Any]:
                     f"http://127.0.0.1:18180{path}", timeout=2
                 ) as response:
                     endpoints[key] = json.loads(response.read().decode())
-            break
-        except (urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
+            state = json.loads(_run(["docker", "inspect", CONTAINER]).stdout)[0]["State"]
+            if (state.get("Health") or {}).get("Status") == "healthy":
+                break
+            last_error = RuntimeError("docker healthcheck has not reported healthy yet")
+        except (urllib.error.URLError, json.JSONDecodeError, OSError, KeyError) as exc:
             last_error = exc
-            time.sleep(2)
+        time.sleep(2)
     else:
         raise RuntimeError(f"health endpoints never became ready: {last_error}")
 
