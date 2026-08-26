@@ -208,7 +208,8 @@ def cmd_execute(args: argparse.Namespace) -> int:
         action=args.action,
         verify_clone=args.clone,
     )
-    _write(args.out_dir / f"plan-{args.host}-{args.action}.json", plan)
+    plan_path = args.out_dir / f"plan-{args.host}-{args.action}.json"
+    _write(plan_path, plan)
     existing = _run(["docker", "ps", "-a", "--filter", f"name=^{CONTAINER}$", "--format", "{{.ID}}"])
     if existing.stdout.strip():
         print("FAIL: managed container already exists")
@@ -219,7 +220,7 @@ def cmd_execute(args: argparse.Namespace) -> int:
         print("FAIL: docker run failed:\n" + "\n".join(tail))
         return 1
     try:
-        attestation = _capture_attestation(args.plan, args.version)
+        attestation = _capture_attestation(plan_path, args.version)
     except RuntimeError as exc:
         _run(plan["remove_command"])
         print(f"FAIL: {exc}")
