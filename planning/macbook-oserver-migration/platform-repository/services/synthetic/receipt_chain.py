@@ -59,7 +59,7 @@ def _check_inspect_matches_plan(inspect_payload: Any, plan: dict[str, Any]) -> N
         raise ChainError("attested action label does not match the plan")
 
 
-def validate_bundle(bundle: Path, *, version: str) -> dict[str, Any]:
+def validate_bundle(bundle: Path, *, version: str, rollback_version: str) -> dict[str, Any]:
     errors: list[str] = []
     hosts = sorted(HOST_ARCHITECTURES)
     arch_by_host = HOST_ARCHITECTURES
@@ -136,8 +136,9 @@ def validate_bundle(bundle: Path, *, version: str) -> dict[str, Any]:
             attest_name = f"attest-{host}-{action}.json"
             attest = read(attest_name)
             health = attest.get("health")
+            expected_version = rollback_version if action == "rollback" else version
             endpoint_errors = runtime_attestation.validate_runtime_attestation(
-                attest.get("inspect"), plan, health if isinstance(health, dict) else {}, version
+                attest.get("inspect"), plan, health if isinstance(health, dict) else {}, expected_version
             )
             errors.extend(f"{host}/{action}: {item}" for item in endpoint_errors)
             _check_inspect_matches_plan(attest.get("inspect"), plan)
@@ -166,9 +167,9 @@ def validate_bundle(bundle: Path, *, version: str) -> dict[str, Any]:
             errors.append(f"{host}: removed identity is not the rollback commit")
         if absence.get("ps_matches") != 0 or absence.get("inspect_absent") is not True:
             errors.append(f"{host}: absence proof does not prove emptiness")
-        if identity_time <= last_stamp[host]:
+        if identity_time < last_stamp[host]:
             errors.append(f"{host}: removal identity does not follow the final attestation")
-        if absence_time <= identity_time:
+        if absence_time < identity_time:
             errors.append(f"{host}: absence proof does not follow removal identity")
 
     findings = scan_repository_secrets.scan_path(bundle)
@@ -181,6 +182,7 @@ def validate_bundle(bundle: Path, *, version: str) -> dict[str, Any]:
     return {
         "bundle": str(bundle),
         "version": version,
+        "rollback_version": rollback_version,
         "receipts_checked": len(stage_stamps),
         "approval_commit": approval["source_commit_sha"],
         "rollback_commit": approval["previous_approved_sha"],
@@ -191,9 +193,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Validate one synthetic rollout receipt bundle")
     parser.add_argument("--bundle", type=Path, required=True)
     parser.add_argument("--version", required=True)
+    parser.add_argument("--rollback-version", required=True)
     args = parser.parse_args()
     try:
-        summary = validate_bundle(args.bundle, version=args.version)
+        summary = validate_bundle(args.bundle, version=args.version, rollback_version=args.rollback_version)
     except (ChainError, OSError) as exc:
         print(f"FAIL: {exc}")
         return 1

@@ -207,14 +207,14 @@ class ReceiptChainTests(unittest.TestCase):
         self._tmp.cleanup()
 
     def test_complete_bundle_passes(self) -> None:
-        summary = validate_bundle(self.bundle, version=VERSION)
+        summary = validate_bundle(self.bundle, version=VERSION, rollback_version="v2")
         self.assertEqual(summary["approval_commit"], SHA_V2)
         self.assertGreater(summary["receipts_checked"], 10)
 
     def test_missing_receipt_fails_closed(self) -> None:
         (self.bundle / "absence-proof-oserver.json").unlink()
         with self.assertRaisesRegex(ChainError, "missing receipt"):
-            validate_bundle(self.bundle, version=VERSION)
+            validate_bundle(self.bundle, version=VERSION, rollback_version="v2")
 
     def test_attested_image_mismatch_is_caught(self) -> None:
         path = self.bundle / "attest-homeserver-deploy.json"
@@ -222,7 +222,7 @@ class ReceiptChainTests(unittest.TestCase):
         payload["inspect"][0]["Image"] = ROLLBACK["linux/amd64"]
         path.write_text(json.dumps(payload))
         with self.assertRaisesRegex(ChainError, "attested image"):
-            validate_bundle(self.bundle, version=VERSION)
+            validate_bundle(self.bundle, version=VERSION, rollback_version="v2")
 
     def test_out_of_order_timestamp_is_caught(self) -> None:
         path = self.bundle / "plan-homeserver-rollback.json"
@@ -230,7 +230,7 @@ class ReceiptChainTests(unittest.TestCase):
         payload["captured_at"] = _ts(61)
         path.write_text(json.dumps(payload))
         with self.assertRaisesRegex(ChainError, "backwards"):
-            validate_bundle(self.bundle, version=VERSION)
+            validate_bundle(self.bundle, version=VERSION, rollback_version="v2")
 
     def test_simultaneous_plan_and_attest_is_rejected(self) -> None:
         plan_path = self.bundle / "plan-homeserver-deploy.json"
@@ -240,12 +240,12 @@ class ReceiptChainTests(unittest.TestCase):
         payload["captured_at"] = stamp
         plan_path.write_text(json.dumps(payload))
         with self.assertRaisesRegex(ChainError, "does not follow its plan"):
-            validate_bundle(self.bundle, version=VERSION)
+            validate_bundle(self.bundle, version=VERSION, rollback_version="v2")
 
     def test_secret_like_key_in_receipt_fails_scan(self) -> None:
         _write(self.bundle / "extra-notes.json", {"deployment_token_file_note": "ok", "api_key_hint": "x"})
         with self.assertRaisesRegex(ChainError, "secret-scan"):
-            validate_bundle(self.bundle, version=VERSION)
+            validate_bundle(self.bundle, version=VERSION, rollback_version="v2")
 
     def test_host_subtree_disagreement_is_caught(self) -> None:
         path = self.bundle / "provenance-oserver.json"
@@ -253,7 +253,7 @@ class ReceiptChainTests(unittest.TestCase):
         payload["subdir_tree"] = "9" * 40
         path.write_text(json.dumps(payload))
         with self.assertRaisesRegex(ChainError, "subtree"):
-            validate_bundle(self.bundle, version=VERSION)
+            validate_bundle(self.bundle, version=VERSION, rollback_version="v2")
 
 
 if __name__ == "__main__":
