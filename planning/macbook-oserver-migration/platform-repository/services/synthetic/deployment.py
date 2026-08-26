@@ -117,10 +117,7 @@ def require_provenance(
     same fields are re-derived from that clone and must match exactly.
     """
     if verify_clone is not None:
-        from git_provenance import collect_git_provenance
-        import json as _json
-        repository = _json.loads((verify_clone / "_repository_metadata.json").read_text()) if False else None
-        derived = _rederive_from_runner(verify_clone)
+        derived = _rederive_from_clone(verify_clone)
         for field in ("head", "clean", "subdir_tree", "remote_url", "contained_branches"):
             if provenance.get(field) != derived.get(field):
                 raise DeploymentError(
@@ -164,7 +161,7 @@ def build_runtime_plan(
     commit_field = "source_commit_sha" if action == "deploy" else "previous_approved_sha"
     digest_field = "platform_digests" if action == "deploy" else "rollback_platform_digests"
     expected_commit = approval[commit_field]
-    source_tree = require_provenance(provenance, approval, action=action)["subdir_tree"]
+    source_tree = require_provenance(provenance, approval, action=action, verify_clone=verify_clone)["subdir_tree"]
     expected_digest = approval[digest_field][architecture]
     _require_digest(image_digest, "image_digest")
     if image_digest != expected_digest:
