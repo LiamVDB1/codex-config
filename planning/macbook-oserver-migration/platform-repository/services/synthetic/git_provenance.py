@@ -40,6 +40,19 @@ def _git(clone: Path, *args: str, check: bool = True) -> subprocess.CompletedPro
     return result
 
 
+def normalize_remote(url: str) -> str:
+    """Reduce remote URL spellings to one comparable form."""
+    text = url.strip().lower()
+    for prefix in ("ssh://", "https://", "http://", "git://"):
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+    if text.startswith("git@"):
+        text = text[4:].replace(":", "/", 1)
+    if text.endswith(".git"):
+        text = text[:-4]
+    return text.rstrip("/")
+
+
 def _require_sha(value: str, field: str) -> str:
     text = value.strip().lower()
     if len(text) != SHA_RE_LENGTH or any(ch not in "0123456789abcdef" for ch in text):
@@ -62,7 +75,7 @@ def collect_git_provenance(
         raise ProvenanceError("at least one allowed branch is required")
 
     remote_url = _git(clone, "remote", "get-url", "origin").stdout.strip()
-    if remote_url != expected_remote:
+    if normalize_remote(remote_url) != normalize_remote(expected_remote):
         raise ProvenanceError(
             f"origin {remote_url!r} is not the canonical remote {expected_remote!r}"
         )
@@ -90,6 +103,7 @@ def collect_git_provenance(
         "schema_version": SCHEMA_VERSION,
         "clone_path": str(clone),
         "remote_url": remote_url,
+        "remote_url_normalized": normalize_remote(remote_url),
         "head": head,
         "clean": clean,
         "source_subdir": source_subdir,

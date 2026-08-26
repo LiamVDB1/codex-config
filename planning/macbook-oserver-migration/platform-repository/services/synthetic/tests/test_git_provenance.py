@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from git_provenance import ProvenanceError, collect_git_provenance  # noqa: E402
+from git_provenance import ProvenanceError, collect_git_provenance, normalize_remote  # noqa: E402
 
 CANONICAL = "https://github.com/LiamVDB1/codex-config.git"
 SUBDIR = "platform-repository"
@@ -47,6 +47,12 @@ class GitProvenanceTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
+
+    def test_remote_spellings_normalize(self) -> None:
+        self.assertEqual(
+            normalize_remote("git@github.com:LiamVDB1/codex-config.git"),
+            normalize_remote("https://github.com/LiamVDB1/codex-config.git"),
+        )
 
     def test_measures_clean_clone_and_binds_subtree(self) -> None:
         receipt = collect_git_provenance(
