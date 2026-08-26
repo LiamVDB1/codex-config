@@ -225,7 +225,7 @@ def cmd_execute(args: argparse.Namespace) -> int:
         _run(plan["remove_command"])
         print(f"FAIL: {exc}")
         return 1
-    _write(args.out_dir / f"attest-{args.host}-{args.action}.json", attestation)
+    _write(args.out_dir / f"attest-{args.host}-{args.action}{args.suffix}.json", attestation)
     print(f"attested {plan['action']} on {plan['host']}")
     return 0
 
@@ -306,6 +306,7 @@ def main() -> int:
     p.add_argument("--image-digest", required=True)
     p.add_argument("--action", choices=("deploy", "rollback"), required=True)
     p.add_argument("--version", required=True)
+    p.add_argument("--suffix", default="")
     p.add_argument("--out-dir", type=Path, required=True)
     p.set_defaults(func=cmd_execute)
 
