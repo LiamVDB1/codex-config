@@ -117,11 +117,6 @@ def cmd_plan(args: argparse.Namespace) -> int:
 
 
 def _capture_attestation(plan_path: Path, version: str) -> dict[str, Any]:
-    inspect_result = _run(["docker", "inspect", CONTAINER])
-    if inspect_result.returncode != 0:
-        raise RuntimeError("docker inspect failed for the running container")
-    inspect_payload = json.loads(inspect_result.stdout)
-
     endpoints: dict[str, Any] = {}
     deadline = time.time() + 120
     last_error: Exception | None = None
@@ -141,6 +136,11 @@ def _capture_attestation(plan_path: Path, version: str) -> dict[str, Any]:
         time.sleep(2)
     else:
         raise RuntimeError(f"health endpoints never became ready: {last_error}")
+
+    inspect_result = _run(["docker", "inspect", CONTAINER])
+    if inspect_result.returncode != 0:
+        raise RuntimeError("docker inspect failed for the running container")
+    inspect_payload = json.loads(inspect_result.stdout)
 
     errors = __import__("runtime_attestation").validate_runtime_attestation(
         inspect_payload, json.loads(plan_path.read_text()), endpoints, version
