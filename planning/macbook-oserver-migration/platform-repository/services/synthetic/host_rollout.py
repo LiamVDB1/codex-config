@@ -46,7 +46,7 @@ def _write(path: Path, payload: dict[str, Any]) -> None:
 
 def _repository_metadata() -> dict[str, Any]:
     """Read the canonical remote/branch/subdir from the running tooling tree."""
-    return json.loads((Path(__file__).resolve().parents[1] / "repository.json").read_text())
+    return json.loads((Path(__file__).resolve().parents[2] / "repository.json").read_text())
 
 
 def cmd_provenance(args: argparse.Namespace) -> int:
