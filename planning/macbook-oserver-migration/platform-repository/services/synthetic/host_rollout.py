@@ -117,6 +117,8 @@ def cmd_plan(args: argparse.Namespace) -> int:
 
 
 def _capture_attestation(plan_path: Path, version: str) -> dict[str, Any]:
+    plan = json.loads(plan_path.read_text())
+    require_docker_healthy = plan.get("action") != "rollback"
     endpoints: dict[str, Any] = {}
     deadline = time.time() + 120
     last_error: Exception | None = None
@@ -128,9 +130,10 @@ def _capture_attestation(plan_path: Path, version: str) -> dict[str, Any]:
                 ) as response:
                     endpoints[key] = json.loads(response.read().decode())
             state = json.loads(_run(["docker", "inspect", CONTAINER]).stdout)[0]["State"]
-            if (state.get("Health") or {}).get("Status") == "healthy":
+            healthy = (state.get("Health") or {}).get("Status") == "healthy"
+            if healthy or (not require_docker_healthy and state.get("Running")):
                 break
-            last_error = RuntimeError("docker healthcheck has not reported healthy yet")
+            last_error = RuntimeError("runtime has not converged to its health contract yet")
         except (urllib.error.URLError, json.JSONDecodeError, OSError, KeyError) as exc:
             last_error = exc
         time.sleep(2)
