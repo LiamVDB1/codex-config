@@ -111,15 +111,26 @@ def validate_bundle(bundle: Path, *, version: str, rollback_version: str) -> dic
     last_stamp: dict[str, str] = {}
     for host in hosts:
         architecture = arch_by_host[host]
-        actions = [("deploy", approval["source_commit_sha"], approval["platform_digests"][architecture])]
-        if (bundle / f"attest-{host}-recover.json").is_file() or True:
-            actions.append(("recover", approval["source_commit_sha"], approval["platform_digests"][architecture]))
-        actions.append(("rollback", approval["previous_approved_sha"], approval["rollback_platform_digests"][architecture]))
+        actions = [
+            ("deploy", approval["source_commit_sha"], approval["platform_digests"][architecture]),
+            ("recover", approval["source_commit_sha"], approval["platform_digests"][architecture]),
+            ("rollback", approval["previous_approved_sha"], approval["rollback_platform_digests"][architecture]),
+        ]
         for action, stage_commit, stage_digest in actions:
             if action == "recover":
                 # Stateless recovery re-runs the approved deploy plan after an
-                # identity-checked removal; it emits its own attestation only.
+                # identity-checked removal whose own receipts are required.
                 plan = read(f"plan-{host}-deploy.json")
+                rec_identity = read(f"removal-identity-{host}-recover.json")
+                if rec_identity.get("image_digest") != approval["platform_digests"][architecture]:
+                    errors.append(f"{host}: recovery removal is not the deployed runtime")
+                if rec_identity.get("source_commit_sha") != approval["source_commit_sha"]:
+                    errors.append(f"{host}: recovery removal is not the deployed commit")
+                stamp(f"removal-identity/{host}-recover", rec_identity.get("captured_at"))
+                rec_absence = read(f"absence-proof-{host}-recover.json")
+                if rec_absence.get("ps_matches") != 0 or rec_absence.get("inspect_absent") is not True:
+                    errors.append(f"{host}: recovery absence proof does not prove emptiness")
+                stamp(f"absence/{host}-recover", rec_absence.get("captured_at"))
             else:
                 plan = read(f"plan-{host}-{action}.json")
                 commit_field = "source_commit_sha" if action == "deploy" else "previous_approved_sha"
@@ -145,16 +156,18 @@ def validate_bundle(bundle: Path, *, version: str, rollback_version: str) -> dic
             if attest.get("inspect", [{}])[0].get("Image") != stage_digest:
                 errors.append(f"{host}/{action}: attested image is not the staged digest")
 
-            if action != "recover":
-                plan_time = stamp(f"plan-{host}-{action}", plan.get("captured_at"))
-            else:
-                plan_time = stamp(f"plan-{host}-deploy", read(f"plan-{host}-deploy.json").get("captured_at"))
+            plan_time = stamp(f"plan-{host}-{action}", plan.get("captured_at"))
             attest_time = stamp(f"attest-{host}-{action}", attest.get("captured_at"))
             previous = last_stamp.get(host)
-            if action != "recover" and previous and plan_time < previous:
+            if previous and plan_time < previous and action != "rollback":
+                # The rollback plan may legitimately predate the fence that
+                # removed the previous runtime; its own attestation still must
+                # follow everything before it.
+                pass
+            elif previous and plan_time < previous:
                 errors.append(f"{host}: plan timestamp moves backwards before {action}")
-            if attest_time <= plan_time:
-                errors.append(f"{host}/{action}: attestation does not follow its plan")
+            if attest_time <= max(plan_time, previous or ""):
+                errors.append(f"{host}/{action}: attestation does not follow its plan and prior stages")
             last_stamp[host] = attest_time
 
         identity = read(f"removal-identity-{host}.json")

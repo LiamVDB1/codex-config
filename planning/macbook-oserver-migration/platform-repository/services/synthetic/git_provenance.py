@@ -22,6 +22,17 @@ class ProvenanceError(ValueError):
     pass
 
 
+def _repository_metadata_fallback(platform_repo_root):
+    """Load canonical remote/branch/subdir from the platform repository root."""
+    metadata = json.loads((Path(platform_repo_root) / "repository.json").read_text())
+    return {
+        "canonical_remote": metadata["canonical_remote"],
+        "canonical_branch": metadata["canonical_branch"],
+        "source_subdir": metadata["source_subdir"],
+        "allowed_branches": [metadata["canonical_branch"], "codex/homeserver-platform"],
+    }
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 

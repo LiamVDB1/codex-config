@@ -91,13 +91,41 @@ def load_approval(path: Path) -> dict[str, Any]:
 PROVENANCE_SCHEMA = "homeserver-synthetic-provenance/v1"
 
 
+def _rederive_from_clone(verify_clone):
+    """Re-derive provenance from the live clone using one metadata authority."""
+    import git_provenance
+
+    metadata = git_provenance._repository_metadata_fallback(Path(__file__).resolve().parents[2])
+    return git_provenance.collect_git_provenance(
+        verify_clone,
+        expected_remote=metadata["canonical_remote"],
+        allowed_branches=metadata["allowed_branches"],
+        source_subdir=metadata["source_subdir"],
+    )
+
+
 def require_provenance(
     provenance: dict[str, Any],
     approval: dict[str, Any],
     *,
     action: str,
+    verify_clone: Any = None,
 ) -> dict[str, Any]:
-    """Cross-check a measured provenance receipt against the approval."""
+    """Cross-check a measured provenance receipt against the approval.
+
+    When verify_clone is provided the receipt is not trusted on its own: the
+    same fields are re-derived from that clone and must match exactly.
+    """
+    if verify_clone is not None:
+        from git_provenance import collect_git_provenance
+        import json as _json
+        repository = _json.loads((verify_clone / "_repository_metadata.json").read_text()) if False else None
+        derived = _rederive_from_runner(verify_clone)
+        for field in ("head", "clean", "subdir_tree", "remote_url", "contained_branches"):
+            if provenance.get(field) != derived.get(field):
+                raise DeploymentError(
+                    f"provenance receipt field {field!r} does not match the live clone"
+                )
     if not isinstance(provenance, dict) or provenance.get("schema_version") != PROVENANCE_SCHEMA:
         raise DeploymentError("provenance receipt schema is unsupported")
     if provenance.get("clean") is not True:
@@ -124,6 +152,7 @@ def build_runtime_plan(
     provenance: dict[str, Any],
     image_digest: str,
     action: str,
+    verify_clone: Any = None,
 ) -> dict[str, Any]:
     if host not in HOST_ARCHITECTURES:
         raise DeploymentError(f"unknown host: {host}")

@@ -138,6 +138,29 @@ def build_bundle(bundle: Path) -> None:
             arch_digest = digest_map[arch]
             if action == "recover":
                 _write(
+                    bundle / f"removal-identity-{host}-recover.json",
+                    {
+                        "schema_version": "homeserver-synthetic-removal-identity/v1",
+                        "container_name": "homeserver-synthetic",
+                        "image_digest": DIGESTS[arch],
+                        "source_commit_sha": SHA_V2,
+                        "action": "deploy",
+                        "captured_at": _ts(clock),
+                    },
+                )
+                clock += 1
+                _write(
+                    bundle / f"absence-proof-{host}-recover.json",
+                    {
+                        "schema_version": "homeserver-synthetic-absence-proof/v1",
+                        "container_name": "homeserver-synthetic",
+                        "ps_matches": 0,
+                        "inspect_absent": True,
+                        "captured_at": _ts(clock),
+                    },
+                )
+                clock += 1
+                _write(
                     bundle / f"attest-{host}-recover.json",
                     {
                         "inspect": _inspect(SHA_V2, DIGESTS[arch], "deploy"),
@@ -241,6 +264,19 @@ class ReceiptChainTests(unittest.TestCase):
         payload["captured_at"] = stamp
         plan_path.write_text(json.dumps(payload))
         with self.assertRaisesRegex(ChainError, "does not follow its plan"):
+            validate_bundle(self.bundle, version=VERSION, rollback_version="v2")
+
+    def test_stale_recovery_attestation_is_rejected(self) -> None:
+        path = self.bundle / "attest-homeserver-recover.json"
+        payload = json.loads(path.read_text())
+        payload["captured_at"] = _ts(71)  # before deploy attestation at _ts(73)
+        path.write_text(json.dumps(payload))
+        with self.assertRaisesRegex(ChainError, "does not follow"):
+            validate_bundle(self.bundle, version=VERSION, rollback_version="v2")
+
+    def test_missing_recovery_removal_receipt_fails_closed(self) -> None:
+        (self.bundle / "removal-identity-homeserver-recover.json").unlink()
+        with self.assertRaisesRegex(ChainError, "missing receipt"):
             validate_bundle(self.bundle, version=VERSION, rollback_version="v2")
 
     def test_secret_like_key_in_receipt_fails_scan(self) -> None:

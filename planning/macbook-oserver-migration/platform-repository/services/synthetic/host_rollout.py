@@ -102,16 +102,26 @@ def cmd_build(args: argparse.Namespace) -> int:
 
 def cmd_plan(args: argparse.Namespace) -> int:
     approval = deployment.load_approval(args.approval)
-    provenance = json.loads(args.provenance.read_text())
+    # Provenance is always re-derived from the live clone at plan time;
+    # caller-supplied receipts are never trusted for an executable plan.
+    repository = _repository_metadata()
+    provenance = git_provenance.collect_git_provenance(
+        args.clone,
+        expected_remote=repository["canonical_remote"],
+        allowed_branches=[repository["canonical_branch"], "codex/homeserver-platform"],
+        source_subdir=repository["source_subdir"],
+    )
+    _write(args.out_dir / f"provenance-{args.host}.json", provenance)
     plan = deployment.build_runtime_plan(
         approval,
         host=args.host,
         architecture=args.architecture,
         provenance=provenance,
+        verify_clone=args.clone,
         image_digest=args.image_digest,
         action=args.action,
     )
-    _write(args.output, plan)
+    _write(args.out_dir / f"plan-{args.host}-{args.action}.json", plan)
     print(f"plan {args.host}/{args.action} digest={plan['image_digest'][:20]}")
     return 0
 
@@ -226,12 +236,12 @@ def main() -> int:
 
     p = sub.add_parser("plan")
     p.add_argument("--approval", type=Path, required=True)
-    p.add_argument("--provenance", type=Path, required=True)
+    p.add_argument("--clone", type=Path, required=True)
     p.add_argument("--host", required=True)
     p.add_argument("--architecture", required=True)
     p.add_argument("--image-digest", required=True)
     p.add_argument("--action", choices=("deploy", "rollback"), required=True)
-    p.add_argument("--output", type=Path, required=True)
+    p.add_argument("--out-dir", type=Path, required=True)
     p.set_defaults(func=cmd_plan)
 
     p = sub.add_parser("execute")

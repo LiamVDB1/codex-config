@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 
-SCANNED_SUFFIXES = {".json", ".md", ".txt", ".yaml", ".yml"}
+SCANNED_SUFFIXES = {".json", ".md", ".txt", ".yaml", ".yml", ".py", ".sh", ".toml", ".env"}
 SENSITIVE_KEY = re.compile(
     r"(?:password|passwd|pwd|token|secret|api[_-]?key|apikey|authorization|cookie|private[_-]?key|access[_-]?key)",
     re.IGNORECASE,
