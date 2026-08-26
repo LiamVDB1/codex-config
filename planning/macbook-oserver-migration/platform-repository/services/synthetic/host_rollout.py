@@ -225,7 +225,7 @@ def cmd_execute(args: argparse.Namespace) -> int:
         _run(plan["remove_command"])
         print(f"FAIL: {exc}")
         return 1
-    _write(args.output, attestation)
+    _write(args.out_dir / f"attest-{args.host}-{args.action}.json", attestation)
     print(f"attested {plan['action']} on {plan['host']}")
     return 0
 
