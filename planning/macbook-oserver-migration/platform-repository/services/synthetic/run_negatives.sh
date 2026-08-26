@@ -2,6 +2,7 @@
 # Deterministic mandatory-negative runner for the synthetic rollout.
 # Usage: run_negatives.sh <clone> <bundle-dir> <out-dir> <amd64-digest> <arm64-digest>
 set -u
+FAILURES=0
 CLONE="$1"
 BUNDLE="$2"
 OUT="$3"
@@ -12,7 +13,7 @@ SYNTH="$REPO_DIR/services/synthetic"
 ROLLOUT="$SYNTH/host_rollout.py"
 mkdir -p "$OUT" "$(mktemp -u)"
 
-fail() { echo "UNEXPECTED($1): see $2"; }
+fail() { echo "UNEXPECTED($1): see $2"; FAILURES=$((FAILURES+1)); }
 
 echo "[neg1] dirty source"
 touch "$SYNTH/dirt.txt"
@@ -92,3 +93,8 @@ grep -q "is not approved" "$OUT/rollback-as-deploy.txt" \
   || fail neg6 "$OUT/rollback-as-deploy.txt"
 
 echo "== negatives complete =="
+if [ "$FAILURES" -ne 0 ]; then
+  echo "NEGATIVES FAILED: $FAILURES unexpected outcome(s)"
+  exit 1
+fi
+echo "ALL NEGATIVES REJECTED"

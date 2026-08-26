@@ -71,6 +71,22 @@ def cmd_build(args: argparse.Namespace) -> int:
         allowed_branches=[repository["canonical_branch"], "codex/homeserver-platform"],
         source_subdir=repository["source_subdir"],
     )
+    if provenance["clean"] is not True:
+        print("FAIL: refusing to build from a dirty clone")
+        return 1
+    server_arch = _run(
+        ["docker", "version", "--format", "{{.Server.Architecture}}"]
+    ).stdout.strip()
+    derived_arch = {"amd64": "linux/amd64", "arm64": "linux/arm64"}.get(server_arch)
+    if derived_arch is None:
+        print(f"FAIL: unsupported server architecture {server_arch!r}")
+        return 1
+    if args.architecture != derived_arch:
+        print(
+            f"FAIL: claimed architecture {args.architecture} does not match "
+            f"docker server architecture {derived_arch}"
+        )
+        return 1
     context = args.clone / repository["source_subdir"]
     tag = f"homeserver-synthetic:candidate-{provenance['head'][:12]}"
     result = _run(
@@ -172,7 +188,26 @@ def _capture_attestation(plan_path: Path, version: str) -> dict[str, Any]:
 
 
 def cmd_execute(args: argparse.Namespace) -> int:
-    plan = json.loads(args.plan.read_text())
+    # Reconstruct the plan from authoritative inputs; a stored plan file is
+    # never executed on trust.
+    approval = deployment.load_approval(args.approval)
+    repository = _repository_metadata()
+    provenance = git_provenance.collect_git_provenance(
+        args.clone,
+        expected_remote=repository["canonical_remote"],
+        allowed_branches=[repository["canonical_branch"], "codex/homeserver-platform"],
+        source_subdir=repository["source_subdir"],
+    )
+    plan = deployment.build_runtime_plan(
+        approval,
+        host=args.host,
+        architecture=args.architecture,
+        provenance=provenance,
+        image_digest=args.image_digest,
+        action=args.action,
+        verify_clone=args.clone,
+    )
+    _write(args.out_dir / f"plan-{args.host}-{args.action}.json", plan)
     existing = _run(["docker", "ps", "-a", "--filter", f"name=^{CONTAINER}$", "--format", "{{.ID}}"])
     if existing.stdout.strip():
         print("FAIL: managed container already exists")
@@ -262,9 +297,14 @@ def main() -> int:
     p.set_defaults(func=cmd_plan)
 
     p = sub.add_parser("execute")
-    p.add_argument("--plan", type=Path, required=True)
+    p.add_argument("--approval", type=Path, required=True)
+    p.add_argument("--clone", type=Path, required=True)
+    p.add_argument("--host", required=True)
+    p.add_argument("--architecture", required=True)
+    p.add_argument("--image-digest", required=True)
+    p.add_argument("--action", choices=("deploy", "rollback"), required=True)
     p.add_argument("--version", required=True)
-    p.add_argument("--output", type=Path, required=True)
+    p.add_argument("--out-dir", type=Path, required=True)
     p.set_defaults(func=cmd_execute)
 
     p = sub.add_parser("remove")

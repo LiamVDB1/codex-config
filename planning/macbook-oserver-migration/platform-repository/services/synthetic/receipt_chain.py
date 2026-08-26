@@ -120,10 +120,12 @@ def validate_bundle(bundle: Path, *, version: str, rollback_version: str) -> dic
             ("recover", approval["source_commit_sha"], approval["platform_digests"][architecture]),
             ("rollback", approval["previous_approved_sha"], approval["rollback_platform_digests"][architecture]),
         ]
+        preroll_stamp = None
         for action, stage_commit, stage_digest in actions:
             if action == "recover":
                 # Stateless recovery re-runs the approved deploy plan after an
-                # identity-checked removal whose own receipts are required.
+                # identity-checked removal whose own receipts are required and
+                # strictly ordered against this stage's attestation.
                 plan = read(f"plan-{host}-deploy.json")
                 rec_identity = read(f"removal-identity-{host}-recover.json")
                 if rec_identity.get("schema_version") != "homeserver-synthetic-removal-identity/v1":
@@ -136,11 +138,16 @@ def validate_bundle(bundle: Path, *, version: str, rollback_version: str) -> dic
                     errors.append(f"{host}: recovery removal is not the deployed runtime")
                 if rec_identity.get("source_commit_sha") != approval["source_commit_sha"]:
                     errors.append(f"{host}: recovery removal is not the deployed commit")
-                stamp(f"removal-identity/{host}-recover", rec_identity.get("captured_at"))
+                rec_id_time = stamp(f"removal-identity/{host}-recover", rec_identity.get("captured_at"))
                 rec_absence = read(f"absence-proof-{host}-recover.json")
                 if rec_absence.get("ps_matches") != 0 or rec_absence.get("inspect_not_found") is not True:
                     errors.append(f"{host}: recovery absence proof does not prove emptiness")
-                stamp(f"absence/{host}-recover", rec_absence.get("captured_at"))
+                rec_ab_time = stamp(f"absence/{host}-recover", rec_absence.get("captured_at"))
+                if rec_ab_time <= rec_id_time:
+                    errors.append(f"{host}: recovery absence does not follow recovery removal")
+                # The recovery attestation that follows must come after this
+                # fence; raise the per-host floor to the absence timestamp.
+                last_stamp[host] = rec_ab_time
             else:
                 plan = read(f"plan-{host}-{action}.json")
                 commit_field = "source_commit_sha" if action == "deploy" else "previous_approved_sha"
@@ -166,18 +173,45 @@ def validate_bundle(bundle: Path, *, version: str, rollback_version: str) -> dic
             if attest.get("inspect", [{}])[0].get("Image") != stage_digest:
                 errors.append(f"{host}/{action}: attested image is not the staged digest")
 
+            if action == "rollback" and preroll_stamp is None:
+                pre_id = read(f"removal-identity-{host}-prerollback.json")
+                if pre_id.get("schema_version") != "homeserver-synthetic-removal-identity/v1":
+                    errors.append(f"{host}: pre-rollback removal schema is unsupported")
+                if pre_id.get("container_name") != "homeserver-synthetic":
+                    errors.append(f"{host}: pre-rollback removal names the wrong container")
+                if pre_id.get("action") != "deploy":
+                    errors.append(f"{host}: pre-rollback removal action does not match the deploy plan")
+                if pre_id.get("image_digest") != approval["platform_digests"][architecture]:
+                    errors.append(f"{host}: pre-rollback removal is not the deployed runtime")
+                if pre_id.get("source_commit_sha") != approval["source_commit_sha"]:
+                    errors.append(f"{host}: pre-rollback removal is not the deployed commit")
+                pre_id_time = stamp(f"removal-identity/{host}-prerollback", pre_id.get("captured_at"))
+                pre_ab = read(f"absence-proof-{host}-prerollback.json")
+                if pre_ab.get("ps_matches") != 0 or pre_ab.get("inspect_not_found") is not True:
+                    errors.append(f"{host}: pre-rollback absence proof does not prove emptiness")
+                pre_ab_time = stamp(f"absence/{host}-prerollback", pre_ab.get("captured_at"))
+                if pre_ab_time <= pre_id_time:
+                    errors.append(f"{host}: pre-rollback absence does not follow removal")
+                if pre_id_time < last_stamp.get(host, ""):
+                    errors.append(f"{host}: pre-rollback fence precedes earlier stages")
+                preroll_stamp = pre_ab_time
             plan_time = stamp(f"plan-{host}-{action}", plan.get("captured_at"))
             attest_time = stamp(f"attest-{host}-{action}", attest.get("captured_at"))
             previous = last_stamp.get(host)
-            if previous and plan_time < previous and action != "rollback":
-                # The rollback plan may legitimately predate the fence that
-                # removed the previous runtime; its own attestation still must
-                # follow everything before it.
-                pass
-            elif previous and plan_time < previous:
+            if previous and plan_time < previous and action == "deploy":
                 errors.append(f"{host}: plan timestamp moves backwards before {action}")
-            if attest_time <= max(plan_time, previous or ""):
+            gate = max(filter(None, [plan_time, previous]))
+            if attest_time <= gate:
                 errors.append(f"{host}/{action}: attestation does not follow its plan and prior stages")
+            if action == "rollback":
+                # The fence that removed the recovered runtime must sit between
+                # the recovery attestation and the rollback attestation.
+                if preroll_stamp is None or not (
+                    last_stamp.get(host, "") < preroll_stamp <= attest_time
+                ):
+                    errors.append(
+                        f"{host}: pre-rollback fence receipts are missing or out of order"
+                    )
             last_stamp[host] = attest_time
 
         identity = read(f"removal-identity-{host}.json")

@@ -14,6 +14,28 @@ SENSITIVE_KEY = re.compile(
     re.IGNORECASE,
 )
 SAFE_KEY_SUFFIXES = ("_ref", "_refs", "_file", "_path", "_enabled", "_required")
+ASSIGNMENT_RE = re.compile(
+    r"^\s*(?:export\s+)?([A-Za-z0-9_-]*"
+    r"(?:password|passwd|pwd|token|secret|api[_-]?key|apikey|authorization|cookie|private[_-]?key|access[_-]?key)"
+    r"[A-Za-z0-9_-]*)\s*[=:]\s*\S",
+    re.IGNORECASE,
+)
+
+
+def _assignment_findings(text: str, path: Path) -> list:
+    findings = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        match = ASSIGNMENT_RE.match(line)
+        if not match:
+            continue
+        key = match.group(1)
+        if key.lower().endswith(SAFE_KEY_SUFFIXES):
+            continue
+        value = line[match.end() - len(match.group(0).partition("=")[2]):].strip()
+        if value.startswith("(") or value.startswith("re."):
+            continue  # code definition, not a literal assignment
+        findings.append((f"{path}:{line_number}", key))
+    return findings
 CREDENTIAL_PATTERNS = (
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
@@ -52,6 +74,8 @@ def scan_path(path: Path) -> list[tuple[str, str]]:
         for pattern in CREDENTIAL_PATTERNS:
             if pattern.search(text):
                 findings.append((str(item), "credential-pattern"))
+        if item.suffix.lower() != ".json":
+            findings.extend(_assignment_findings(text, item))
         if item.suffix.lower() != ".json" or item.name.endswith(".schema.json"):
             continue
         try:

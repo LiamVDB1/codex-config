@@ -169,6 +169,29 @@ def build_bundle(bundle: Path) -> None:
                     },
                 )
                 clock += 1
+                _write(
+                    bundle / f"removal-identity-{host}-prerollback.json",
+                    {
+                        "schema_version": "homeserver-synthetic-removal-identity/v1",
+                        "container_name": "homeserver-synthetic",
+                        "image_digest": DIGESTS[arch],
+                        "source_commit_sha": SHA_V2,
+                        "action": "deploy",
+                        "captured_at": _ts(clock),
+                    },
+                )
+                clock += 1
+                _write(
+                    bundle / f"absence-proof-{host}-prerollback.json",
+                    {
+                        "schema_version": "homeserver-synthetic-absence-proof/v1",
+                        "container_name": "homeserver-synthetic",
+                        "ps_matches": 0,
+                        "inspect_not_found": True,
+                        "captured_at": _ts(clock),
+                    },
+                )
+                clock += 1
                 continue
             _write(
                 bundle / f"plan-{host}-{action}.json",
@@ -249,11 +272,11 @@ class ReceiptChainTests(unittest.TestCase):
             validate_bundle(self.bundle, version=VERSION, rollback_version="v2")
 
     def test_out_of_order_timestamp_is_caught(self) -> None:
-        path = self.bundle / "plan-homeserver-rollback.json"
+        path = self.bundle / "attest-homeserver-rollback.json"
         payload = json.loads(path.read_text())
-        payload["captured_at"] = _ts(61)
+        payload["captured_at"] = _ts(61)  # before the pre-rollback fence
         path.write_text(json.dumps(payload))
-        with self.assertRaisesRegex(ChainError, "backwards"):
+        with self.assertRaisesRegex(ChainError, "fence receipts are missing or out of order"):
             validate_bundle(self.bundle, version=VERSION, rollback_version="v2")
 
     def test_simultaneous_plan_and_attest_is_rejected(self) -> None:
