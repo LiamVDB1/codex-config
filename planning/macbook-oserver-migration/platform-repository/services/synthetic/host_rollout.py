@@ -167,12 +167,13 @@ def cmd_execute(args: argparse.Namespace) -> int:
 
 def cmd_remove(args: argparse.Namespace) -> int:
     plan = json.loads(args.plan.read_text())
+    suffix = args.suffix
     live = _run(["docker", "inspect", CONTAINER])
     if live.returncode != 0:
         print("FAIL: container to remove is not running")
         return 1
     identity = removal.capture_removal_identity(json.loads(live.stdout), plan)
-    _write(args.out_dir / f"removal-identity-{plan['host']}.json", identity)
+    _write(args.out_dir / f"removal-identity-{plan['host']}{suffix}.json", identity)
 
     removed = _run(plan["remove_command"])
     if removed.returncode != 0:
@@ -190,7 +191,7 @@ def cmd_remove(args: argparse.Namespace) -> int:
     except removal.RemovalError as exc:
         print(f"FAIL: {exc}")
         return 1
-    _write(args.out_dir / f"absence-proof-{plan['host']}.json", absence)
+    _write(args.out_dir / f"absence-proof-{plan['host']}{suffix}.json", absence)
     print(f"removed and proved absence on {plan['host']}")
     return 0
 
@@ -231,6 +232,7 @@ def main() -> int:
     p = sub.add_parser("remove")
     p.add_argument("--plan", type=Path, required=True)
     p.add_argument("--out-dir", type=Path, required=True)
+    p.add_argument("--suffix", default="")
     p.set_defaults(func=cmd_remove)
 
     args = parser.parse_args()
