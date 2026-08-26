@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+"""Validate the relational integrity of one synthetic rollout receipt bundle.
+
+The chain binds measured provenance, native build digests, the approval, per
+host deploy/rollback plans and attestations, and removal identity plus absence
+proof into one ordered, cross-checked lifecycle. Every timestamp is ISO-8601 Z
+and strictly ordered; every relation is checked against both endpoints; every
+file is secret-scanned.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+
+from deployment import HOST_ARCHITECTURES, load_approval  # noqa: E402
+import runtime_attestation  # noqa: E402
+import scan_repository_secrets  # noqa: E402
+
+
+TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
+
+
+class ChainError(ValueError):
+    pass
+
+
+def _load(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ChainError(f"{path.name} cannot be loaded: {exc}") from exc
+
+
+def _ts(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not TS_RE.fullmatch(value):
+        raise ChainError(f"{label}.captured_at is not an ISO-8601 UTC Z timestamp")
+    return value
+
+
+def _check_inspect_matches_plan(inspect_payload: Any, plan: dict[str, Any]) -> None:
+    if not isinstance(inspect_payload, list) or len(inspect_payload) != 1:
+        raise ChainError("attestation inspect payload must contain exactly one container")
+    inspect = inspect_payload[0]
+    if not isinstance(inspect, dict):
+        raise ChainError("attestation inspect container must be an object")
+    if inspect.get("Image") != plan.get("image_digest"):
+        raise ChainError("attested image does not match the plan digest")
+    labels = (inspect.get("Config") or {}).get("Labels") or {}
+    if labels.get("homeserver.source_commit") != plan.get("source_commit_sha"):
+        raise ChainError("attested source commit does not match the plan")
+    if labels.get("homeserver.action") != plan.get("action"):
+        raise ChainError("attested action label does not match the plan")
+
+
+def validate_bundle(bundle: Path, *, version: str) -> dict[str, Any]:
+    errors: list[str] = []
+    hosts = sorted(HOST_ARCHITECTURES)
+    arch_by_host = HOST_ARCHITECTURES
+
+    approval_path = bundle / "approval.json"
+    approval = load_approval(approval_path)
+
+    def read(name: str) -> Any:
+        path = bundle / name
+        if not path.is_file():
+            raise ChainError(f"missing receipt: {name}")
+        return _load(path)
+
+    stage_stamps: list[tuple[str, str]] = []
+
+    def stamp(label: str, value: Any) -> str:
+        parsed = _ts(value, label)
+        stage_stamps.append((label, parsed))
+        return parsed
+
+    builds: dict[str, dict[str, Any]] = {}
+    for architecture in sorted(HOST_ARCHITECTURES.values()):
+        build = read(f"build-{architecture.replace('/', '_')}.json")
+        if build.get("image_id") != approval["platform_digests"][architecture]:
+            errors.append(f"build {architecture} image id does not match approved digest")
+        if build.get("schema_version") != "homeserver-synthetic-build/v1":
+            errors.append(f"build {architecture} schema is unsupported")
+        stamp(f"build/{architecture}", build.get("captured_at"))
+        builds[architecture] = build
+
+    provenance_by_host: dict[str, dict[str, Any]] = {}
+    subtree_by_host: dict[str, str] = {}
+    for host in hosts:
+        provenance = read(f"provenance-{host}.json")
+        if provenance.get("clean") is not True:
+            errors.append(f"{host} provenance is not clean")
+        if provenance.get("head") != approval["source_commit_sha"]:
+            errors.append(f"{host} provenance head does not match approved commit")
+        tree = provenance.get("subdir_tree")
+        if not isinstance(tree, str) or len(tree) != 40:
+            errors.append(f"{host} provenance lacks a bound source subtree")
+        else:
+            subtree_by_host[host] = tree
+        stamp(f"provenance/{host}", provenance.get("captured_at"))
+        provenance_by_host[host] = provenance
+    if len(set(subtree_by_host.values())) > 1:
+        errors.append("hosts disagree on the bound source subtree hash")
+
+    last_stamp: dict[str, str] = {}
+    for host in hosts:
+        architecture = arch_by_host[host]
+        for action in ("deploy", "rollback"):
+            plan = read(f"plan-{host}-{action}.json")
+            commit_field = "source_commit_sha" if action == "deploy" else "previous_approved_sha"
+            digest_field = "platform_digests" if action == "deploy" else "rollback_platform_digests"
+            if plan.get("action") != action or plan.get("host") != host:
+                errors.append(f"plan-{host}-{action} identity fields are inconsistent")
+            if plan.get("source_commit_sha") != approval[commit_field]:
+                errors.append(f"plan-{host}-{action} binds the wrong approved commit")
+            if plan.get("image_digest") != approval[digest_field][architecture]:
+                errors.append(f"plan-{host}-{action} binds the wrong approved digest")
+            if action == "deploy" and plan.get("provenance_subdir_tree") != subtree_by_host.get(host):
+                errors.append(f"plan-{host}-deploy does not bind the measured source subtree")
+
+            attest = read(f"attest-{host}-{action}.json")
+            health = attest.get("health")
+            endpoint_errors = runtime_attestation.validate_runtime_attestation(
+                attest.get("inspect"), plan, health if isinstance(health, dict) else {}, version
+            )
+            errors.extend(f"{host}/{action}: {item}" for item in endpoint_errors)
+            _check_inspect_matches_plan(attest.get("inspect"), plan)
+
+            plan_time = stamp(f"plan-{host}-{action}", plan.get("captured_at"))
+            attest_time = stamp(f"attest-{host}-{action}", attest.get("captured_at"))
+            previous = last_stamp.get(host)
+            if previous and plan_time < previous:
+                errors.append(f"{host}: plan timestamp moves backwards before {action}")
+            if attest_time <= plan_time:
+                errors.append(f"{host}/{action}: attestation does not follow its plan")
+            last_stamp[host] = attest_time
+
+        identity = read(f"removal-identity-{host}.json")
+        absence = read(f"absence-proof-{host}.json")
+        identity_time = stamp(f"removal-identity/{host}", identity.get("captured_at"))
+        absence_time = stamp(f"absence/{host}", absence.get("captured_at"))
+        if identity.get("image_digest") != approval["rollback_platform_digests"][architecture]:
+            errors.append(f"{host}: removed identity is not the rollback runtime")
+        if identity.get("source_commit_sha") != approval["previous_approved_sha"]:
+            errors.append(f"{host}: removed identity is not the rollback commit")
+        if absence.get("ps_matches") != 0 or absence.get("inspect_absent") is not True:
+            errors.append(f"{host}: absence proof does not prove emptiness")
+        if identity_time <= last_stamp[host]:
+            errors.append(f"{host}: removal identity does not follow the final attestation")
+        if absence_time <= identity_time:
+            errors.append(f"{host}: absence proof does not follow removal identity")
+
+    findings = scan_repository_secrets.scan_path(bundle)
+    for path, key in findings:
+        errors.append(f"secret-scan: {Path(path).name}:{key}")
+
+    if errors:
+        raise ChainError("; ".join(errors))
+
+    return {
+        "bundle": str(bundle),
+        "version": version,
+        "receipts_checked": len(stage_stamps),
+        "approval_commit": approval["source_commit_sha"],
+        "rollback_commit": approval["previous_approved_sha"],
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Validate one synthetic rollout receipt bundle")
+    parser.add_argument("--bundle", type=Path, required=True)
+    parser.add_argument("--version", required=True)
+    args = parser.parse_args()
+    try:
+        summary = validate_bundle(args.bundle, version=args.version)
+    except (ChainError, OSError) as exc:
+        print(f"FAIL: {exc}")
+        return 1
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    print("PASS: receipt chain is complete, ordered, related and secret-free")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

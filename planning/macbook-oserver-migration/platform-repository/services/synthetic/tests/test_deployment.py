@@ -39,6 +39,20 @@ def valid_approval() -> dict:
     }
 
 
+def valid_provenance(head: str = SHA_V2) -> dict:
+    return {
+        "schema_version": "homeserver-synthetic-provenance/v1",
+        "clone_path": "/srv/homeserver/repo",
+        "remote_url": "https://github.com/LiamVDB1/codex-config.git",
+        "head": head,
+        "clean": True,
+        "source_subdir": "planning/macbook-oserver-migration/platform-repository",
+        "subdir_tree": SHA_V1,
+        "contained_branches": ["main"],
+        "captured_at": "2026-08-26T00:00:00Z",
+    }
+
+
 def write_approval(directory: Path, approval: dict | None = None) -> Path:
     candidate = json.loads(json.dumps(approval or valid_approval()))
     index = {
@@ -104,14 +118,52 @@ class ApprovalTests(unittest.TestCase):
                     load_approval(path)
 
 
+class ProvenanceGateTests(unittest.TestCase):
+    def test_dirty_measured_provenance_fails(self) -> None:
+        provenance = valid_provenance()
+        provenance["clean"] = False
+        with self.assertRaisesRegex(DeploymentError, "clean"):
+            build_runtime_plan(
+                valid_approval(),
+                host="homeserver",
+                architecture="linux/amd64",
+                provenance=provenance,
+                image_digest=AMD64_DIGEST,
+                action="deploy",
+            )
+
+    def test_wrong_head_fails(self) -> None:
+        with self.assertRaisesRegex(DeploymentError, "approved commit"):
+            build_runtime_plan(
+                valid_approval(),
+                host="homeserver",
+                architecture="linux/amd64",
+                provenance=valid_provenance(head=SHA_V1),
+                image_digest=AMD64_DIGEST,
+                action="deploy",
+            )
+
+    def test_unsupported_provenance_schema_fails(self) -> None:
+        provenance = valid_provenance()
+        provenance["schema_version"] = "asserted/v1"
+        with self.assertRaisesRegex(DeploymentError, "schema"):
+            build_runtime_plan(
+                valid_approval(),
+                host="homeserver",
+                architecture="linux/amd64",
+                provenance=provenance,
+                image_digest=AMD64_DIGEST,
+                action="deploy",
+            )
+
+
 class RuntimePlanTests(unittest.TestCase):
     def test_approved_plan_is_loopback_only_and_hardened(self) -> None:
         plan = build_runtime_plan(
             valid_approval(),
             host="homeserver",
             architecture="linux/amd64",
-            actual_source_commit=SHA_V2,
-            source_clean=True,
+            provenance=valid_provenance(),
             image_digest=AMD64_DIGEST,
             action="deploy",
         )
@@ -121,6 +173,7 @@ class RuntimePlanTests(unittest.TestCase):
         self.assertIn("no-new-privileges", command)
         self.assertIn("--cap-drop", command)
         self.assertEqual(command[-1], AMD64_DIGEST)
+        self.assertTrue(plan["captured_at"].endswith("Z"))
 
     def test_wrong_architecture_fails(self) -> None:
         with self.assertRaisesRegex(DeploymentError, "architecture"):
@@ -128,21 +181,8 @@ class RuntimePlanTests(unittest.TestCase):
                 valid_approval(),
                 host="homeserver",
                 architecture="linux/arm64",
-                actual_source_commit=SHA_V2,
-                source_clean=True,
+                provenance=valid_provenance(),
                 image_digest=ARM64_DIGEST,
-                action="deploy",
-            )
-
-    def test_dirty_source_fails(self) -> None:
-        with self.assertRaisesRegex(DeploymentError, "clean"):
-            build_runtime_plan(
-                valid_approval(),
-                host="homeserver",
-                architecture="linux/amd64",
-                actual_source_commit=SHA_V2,
-                source_clean=False,
-                image_digest=AMD64_DIGEST,
                 action="deploy",
             )
 
@@ -152,32 +192,18 @@ class RuntimePlanTests(unittest.TestCase):
                 valid_approval(),
                 host="homeserver",
                 architecture="linux/amd64",
-                actual_source_commit=SHA_V2,
-                source_clean=True,
+                provenance=valid_provenance(),
                 image_digest="sha256:" + "f" * 64,
                 action="deploy",
             )
 
-    def test_wrong_commit_fails(self) -> None:
-        with self.assertRaisesRegex(DeploymentError, "commit"):
-            build_runtime_plan(
-                valid_approval(),
-                host="homeserver",
-                architecture="linux/amd64",
-                actual_source_commit=SHA_V1,
-                source_clean=True,
-                image_digest=AMD64_DIGEST,
-                action="deploy",
-            )
-
-    def test_rollback_uses_previous_digest(self) -> None:
+    def test_rollback_binds_previous_approval_and_digest(self) -> None:
         approval = valid_approval()
         plan = build_runtime_plan(
             approval,
             host="oserver",
             architecture="linux/arm64",
-            actual_source_commit=SHA_V1,
-            source_clean=True,
+            provenance=valid_provenance(),
             image_digest=approval["rollback_platform_digests"]["linux/arm64"],
             action="rollback",
         )

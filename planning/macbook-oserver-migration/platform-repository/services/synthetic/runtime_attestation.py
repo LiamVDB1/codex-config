@@ -45,18 +45,26 @@ def validate_runtime_attestation(
     _equal(errors, inspect.get("Name"), CONTAINER_NAME, "container name is not approved")
     _equal(errors, inspect.get("Image"), plan.get("image_digest"), "container image does not match approved digest")
     config = inspect.get("Config")
+    if not isinstance(config, dict):
+        errors.append("container config is missing")
+        config = {}
     labels = config.get("Labels") if isinstance(config, dict) else None
     if not isinstance(labels, dict):
         errors.append("container labels are missing")
     else:
         _equal(errors, labels.get("homeserver.source_commit"), plan.get("source_commit_sha"), "container source commit does not match approved source")
         _equal(errors, labels.get("homeserver.action"), plan.get("action"), "container action does not match approved action")
+    _equal(errors, config.get("User"), "65532:65532", "container must run as the unprivileged 65532:65532 user")
+    env = config.get("Env")
+    if env is not None and env != []:
+        errors.append("container environment must be empty")
 
     host_config = inspect.get("HostConfig")
     if not isinstance(host_config, dict):
         errors.append("container host configuration is missing")
         host_config = {}
     _equal(errors, host_config.get("ReadonlyRootfs"), True, "root filesystem is not read-only")
+    _equal(errors, host_config.get("Privileged"), False, "container must not be privileged")
     _equal(errors, inspect.get("Mounts"), [], "synthetic runtime must not have mounts")
     _equal(errors, host_config.get("CapDrop"), ["ALL"], "container capabilities are not dropped exactly")
     _equal(errors, host_config.get("SecurityOpt"), ["no-new-privileges"], "no-new-privileges is not enabled exactly")

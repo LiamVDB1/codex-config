@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -87,13 +88,40 @@ def load_approval(path: Path) -> dict[str, Any]:
     return approval
 
 
+PROVENANCE_SCHEMA = "homeserver-synthetic-provenance/v1"
+
+
+def require_provenance(
+    provenance: dict[str, Any],
+    approval: dict[str, Any],
+    *,
+    action: str,
+) -> dict[str, Any]:
+    """Cross-check a measured provenance receipt against the approval."""
+    if not isinstance(provenance, dict) or provenance.get("schema_version") != PROVENANCE_SCHEMA:
+        raise DeploymentError("provenance receipt schema is unsupported")
+    if provenance.get("clean") is not True:
+        raise DeploymentError("measured clone state is not clean")
+    del action
+    # The provenance receipt always describes the deployed tooling clone, which
+    # sits at the approved source commit for both deploy and rollback actions.
+    if provenance.get("head") != approval["source_commit_sha"]:
+        raise DeploymentError(
+            f"clone HEAD {provenance.get('head')} does not match approved commit "
+            f"{approval['source_commit_sha']}"
+        )
+    tree = provenance.get("subdir_tree")
+    if not isinstance(tree, str) or not SHA_RE.fullmatch(tree):
+        raise DeploymentError("provenance receipt lacks the bound source subtree hash")
+    return {"subdir_tree": tree}
+
+
 def build_runtime_plan(
     approval: dict[str, Any],
     *,
     host: str,
     architecture: str,
-    actual_source_commit: str,
-    source_clean: bool,
+    provenance: dict[str, Any],
     image_digest: str,
     action: str,
 ) -> dict[str, Any]:
@@ -103,17 +131,12 @@ def build_runtime_plan(
         raise DeploymentError(f"architecture {architecture} is not approved for {host}")
     if action not in {"deploy", "rollback"}:
         raise DeploymentError(f"unsupported action: {action}")
-    if source_clean is not True:
-        raise DeploymentError("source must be clean")
 
     commit_field = "source_commit_sha" if action == "deploy" else "previous_approved_sha"
     digest_field = "platform_digests" if action == "deploy" else "rollback_platform_digests"
     expected_commit = approval[commit_field]
+    source_tree = require_provenance(provenance, approval, action=action)["subdir_tree"]
     expected_digest = approval[digest_field][architecture]
-    if actual_source_commit != expected_commit:
-        raise DeploymentError(
-            f"actual source commit {actual_source_commit} does not match approved commit {expected_commit}"
-        )
     _require_digest(image_digest, "image_digest")
     if image_digest != expected_digest:
         raise DeploymentError(f"image digest {image_digest} is not approved for {architecture}")
@@ -147,12 +170,14 @@ def build_runtime_plan(
         image_digest,
     ]
     return {
+        "captured_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "schema_version": "homeserver-synthetic-runtime-plan/v1",
         "service_id": approval["service_id"],
         "action": action,
         "host": host,
         "architecture": architecture,
         "source_commit_sha": expected_commit,
+        "provenance_subdir_tree": source_tree,
         "image_digest": expected_digest,
         "artifact_index_digest": approval["artifact_index_digest"],
         "command": command,
@@ -170,20 +195,23 @@ def main() -> int:
     parser.add_argument("approval", type=Path)
     parser.add_argument("--host", choices=sorted(HOST_ARCHITECTURES), required=True)
     parser.add_argument("--architecture", choices=sorted(HOST_ARCHITECTURES.values()), required=True)
-    parser.add_argument("--source-commit", required=True)
-    parser.add_argument("--source-clean", action="store_true")
+    parser.add_argument("--provenance", type=Path, required=True)
     parser.add_argument("--image-digest", required=True)
     parser.add_argument("--action", choices=("deploy", "rollback"), required=True)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     try:
         approval = load_approval(args.approval)
+        try:
+            provenance = json.loads(args.provenance.read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"FAIL: provenance cannot be loaded: {exc}")
+            return 1
         plan = build_runtime_plan(
             approval,
             host=args.host,
             architecture=args.architecture,
-            actual_source_commit=args.source_commit,
-            source_clean=args.source_clean,
+            provenance=provenance,
             image_digest=args.image_digest,
             action=args.action,
         )

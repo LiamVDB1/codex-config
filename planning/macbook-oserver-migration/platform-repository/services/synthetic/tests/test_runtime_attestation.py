@@ -39,6 +39,8 @@ def valid_inspect() -> list[dict]:
         "Image": DIGEST,
         "Name": "/homeserver-synthetic",
         "Config": {
+            "User": "65532:65532",
+            "Env": None,
             "Labels": {
                 "homeserver.action": "deploy",
                 "homeserver.source_commit": SHA,
@@ -46,6 +48,7 @@ def valid_inspect() -> list[dict]:
             },
         },
         "HostConfig": {
+            "Privileged": False,
             "ReadonlyRootfs": True,
             "Memory": 134217728,
             "NanoCpus": 250000000,
@@ -103,6 +106,30 @@ class RuntimeAttestationTests(unittest.TestCase):
         self.assertIn("user-flow version does not match", validate_runtime_attestation(
             valid_inspect(), valid_plan(), endpoints, "v2"
         ))
+
+    def test_root_user_fails(self) -> None:
+        inspect = valid_inspect()
+        inspect[0]["Config"]["User"] = "root"
+        self.assertIn(
+            "container must run as the unprivileged 65532:65532 user",
+            validate_runtime_attestation(inspect, valid_plan(), valid_endpoints(), "v2"),
+        )
+
+    def test_privileged_runtime_fails(self) -> None:
+        inspect = valid_inspect()
+        inspect[0]["HostConfig"]["Privileged"] = True
+        self.assertIn(
+            "container must not be privileged",
+            validate_runtime_attestation(inspect, valid_plan(), valid_endpoints(), "v2"),
+        )
+
+    def test_environment_leakage_fails(self) -> None:
+        inspect = valid_inspect()
+        inspect[0]["Config"]["Env"] = ["PATH=/usr/bin"]
+        self.assertIn(
+            "container environment must be empty",
+            validate_runtime_attestation(inspect, valid_plan(), valid_endpoints(), "v2"),
+        )
 
     def test_extra_endpoint_evidence_fails_closed(self) -> None:
         endpoints = copy.deepcopy(valid_endpoints())
