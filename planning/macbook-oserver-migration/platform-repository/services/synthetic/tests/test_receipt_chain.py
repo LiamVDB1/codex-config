@@ -90,11 +90,11 @@ def _inspect(commit: str, digest: str, action: str) -> list[dict]:
     ]
 
 
-def _health() -> dict:
+def _health(version: str = VERSION) -> dict:
     return {
         "liveness": {"status": "ok"},
         "readiness": {"status": "ready"},
-        "user_flow": {"service": "SVC-SYNTHETIC", "version": VERSION},
+        "user_flow": {"service": "SVC-SYNTHETIC", "version": version},
     }
 
 
@@ -134,6 +134,7 @@ def build_bundle(bundle: Path) -> None:
             ("recover", SHA_V2, DIGESTS),
             ("rollback", SHA_V1, ROLLBACK),
         ):
+            stage_version = "v2" if action == "rollback" else VERSION
             arch_digest = digest_map[arch]
             if action == "recover":
                 _write(
@@ -167,7 +168,7 @@ def build_bundle(bundle: Path) -> None:
                 bundle / f"attest-{host}-{action}.json",
                 {
                     "inspect": _inspect(commit, arch_digest, action),
-                    "health": _health(),
+                    "health": _health(stage_version),
                     "captured_at": _ts(clock),
                 },
             )
