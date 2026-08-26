@@ -44,8 +44,13 @@ def _write(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
 
+def _repository_metadata() -> dict[str, Any]:
+    """Read the canonical remote/branch/subdir from the running tooling tree."""
+    return json.loads((Path(__file__).resolve().parents[1] / "repository.json").read_text())
+
+
 def cmd_provenance(args: argparse.Namespace) -> int:
-    repository = json.loads((args.clone / "repository.json").read_text())
+    repository = _repository_metadata()
     receipt = git_provenance.collect_git_provenance(
         args.clone,
         expected_remote=repository["canonical_remote"],
@@ -59,7 +64,7 @@ def cmd_provenance(args: argparse.Namespace) -> int:
 
 def cmd_build(args: argparse.Namespace) -> int:
     provenance = json.loads(args.provenance.read_text())
-    context = args.clone / json.loads((args.clone / "repository.json").read_text())["source_subdir"]
+    context = args.clone / _repository_metadata()["source_subdir"]
     tag = f"homeserver-synthetic:candidate-{provenance['head'][:12]}"
     result = _run(
         [
