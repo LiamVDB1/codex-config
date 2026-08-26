@@ -123,7 +123,7 @@ def _capture_attestation(plan_path: Path, version: str) -> dict[str, Any]:
     inspect_payload = json.loads(inspect_result.stdout)
 
     endpoints: dict[str, Any] = {}
-    deadline = time.time() + 60
+    deadline = time.time() + 120
     last_error: Exception | None = None
     while time.time() < deadline:
         try:

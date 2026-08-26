@@ -10,5 +10,5 @@ WORKDIR /app
 COPY app.py VERSION ./
 USER 65532:65532
 EXPOSE 8080
-HEALTHCHECK --interval=5s --timeout=3s --retries=12 --start-period=5s CMD ["wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+HEALTHCHECK --interval=5s --timeout=10s --retries=24 --start-period=30s CMD ["wget", "-qO-", "http://127.0.0.1:8080/healthz"]
 ENTRYPOINT ["python3", "/app/app.py"]
